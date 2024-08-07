@@ -36,6 +36,12 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.UserSessionModel;
+import org.keycloak.models.UserSessionProvider;
+import org.keycloak.protocol.oidc.AccessTokenIntrospectionProvider;
+import org.keycloak.protocol.oidc.AccessTokenIntrospectionProviderFactory;
+import org.keycloak.protocol.oidc.TokenIntrospectionProvider;
+import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.authorization.Permission;
 import org.keycloak.services.managers.RealmManager;
 import org.keycloak.services.resources.admin.AdminAuth;
@@ -105,6 +111,17 @@ class MgmtPermissions implements AdminPermissionEvaluator, AdminPermissionManage
             ClientModel client  = session.clients().getClientByClientId(auth.getRealm(), issuedFor);
             if (client != null && Boolean.parseBoolean(client.getAttribute(Constants.SECURITY_ADMIN_CONSOLE_ATTR))) {
                 this.identity = new UserModelIdentity(auth.getRealm(), auth.getUser());
+            } else if (auth.getToken().getSubject() == null) {
+                UserSessionProvider sessions = session.sessions();
+                UserSessionModel userSession = sessions.getUserSession(realm, auth.getToken().getSessionId());
+
+                if (userSession == null) {
+                    userSession = sessions.getOfflineUserSession(realm, auth.getToken().getSessionId());
+                }
+                AccessTokenIntrospectionProvider provider = (AccessTokenIntrospectionProvider) session.getProvider(TokenIntrospectionProvider.class,
+                        AccessTokenIntrospectionProviderFactory.ACCESS_TOKEN_TYPE);
+                AccessToken accessToken = provider.transformAccessToken(auth.getToken(), userSession);
+                this.identity = new KeycloakIdentity(accessToken, session);
             } else {
                 this.identity = new KeycloakIdentity(auth.getToken(), session);
             }
