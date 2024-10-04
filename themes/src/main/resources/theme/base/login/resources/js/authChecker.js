@@ -1,4 +1,5 @@
 const CHECK_INTERVAL_MILLISECS = 2000;
+const initialAuthSession = getAuthSession();
 const initialSession = getSession();
 
 let timeout;
@@ -18,6 +19,12 @@ export function checkCookiesAndSetTimer(loginRestartUrl) {
     return;
   }
 
+  const authSession = getAuthSession();
+
+  if (initialAuthSession !== authSession) {
+    location.reload();
+  }
+
   const session = getSession();
 
   if (!session) {
@@ -30,6 +37,10 @@ export function checkCookiesAndSetTimer(loginRestartUrl) {
     // Redirect to the login restart URL. This can typically automatically login user due the SSO
     location.href = loginRestartUrl;
   }
+}
+
+function getAuthSession() {
+  return getCookieByName("AUTH_SESSION_ID");
 }
 
 function getSession() {

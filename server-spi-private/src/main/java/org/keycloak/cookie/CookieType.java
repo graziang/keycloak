@@ -20,7 +20,7 @@ public final class CookieType {
             .build();
 
     public static final CookieType AUTH_SESSION_ID = CookieType.create("AUTH_SESSION_ID")
-            .scope(CookieScope.FEDERATION)
+            .scope(CookieScope.FEDERATION_JS)
             .defaultMaxAge(CookieMaxAge.SESSION)
             .build();
 
