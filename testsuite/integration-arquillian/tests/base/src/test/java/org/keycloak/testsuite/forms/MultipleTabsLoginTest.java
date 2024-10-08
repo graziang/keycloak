@@ -25,7 +25,18 @@ import static org.keycloak.testsuite.util.URLAssert.assertCurrentUrlStartsWith;
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
@@ -39,6 +50,7 @@ import org.keycloak.common.util.UriUtils;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventType;
+import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
@@ -49,6 +61,8 @@ import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.testsuite.AbstractTestRealmKeycloakTest;
 import org.keycloak.testsuite.ActionURIUtils;
 import org.keycloak.testsuite.Assert;
@@ -239,6 +253,49 @@ public class MultipleTabsLoginTest extends AbstractTestRealmKeycloakTest {
                     .removeDetail(Details.CODE_ID)
                     .assertEvent(true);
         }
+    }
+
+
+    @Test
+    public void testSessions() throws InterruptedException {
+        ExecutorService threadPool = Executors.newFixedThreadPool(5);
+
+
+        String rootId = testingClient.server("test").fetchString(session -> {
+            RootAuthenticationSessionModel rootAuthSession = session.authenticationSessions().createRootAuthenticationSession(session.getContext().getRealm());
+            return  rootAuthSession.getId();
+        });
+
+        rootId = rootId.replace("\"", "");
+        ConcurrentHashMap.KeySetView<String, Boolean> tabIds = ConcurrentHashMap.newKeySet();
+
+        Collection<Callable<Void>> tasks = new ArrayList<>();
+        for (int i = 0;  i < 4; i++) {
+
+            String finalRootId = rootId;
+            int finalI = i;
+            Callable<Void> task = () -> {
+                tabIds.add(testingClient.server("test").fetchString(session -> {
+                    RootAuthenticationSessionModel rootAuthSession = session.authenticationSessions().getRootAuthenticationSession(session.getContext().getRealm(), finalRootId);
+                    ClientModel client = session.getContext().getRealm().getClientByClientId("test-app");
+                    AuthenticationSessionModel authenticationSession = rootAuthSession.createAuthenticationSession(client);
+                    System.out.println("tab1" + finalI + ":" + authenticationSession.getTabId());
+                    return authenticationSession.getTabId();
+                }));
+                return null;
+            };
+            tasks.add(task);
+        }
+        threadPool.invokeAll(tasks);
+        threadPool.awaitTermination(1, TimeUnit.SECONDS);
+        threadPool.shutdown();
+
+        String finalRootId1 = rootId;
+        testingClient.server("test").run(session -> {
+            RootAuthenticationSessionModel rootAuthSession = session.authenticationSessions().getRootAuthenticationSession(session.getContext().getRealm(), finalRootId1);
+            Assert.assertEquals(4, rootAuthSession.getAuthenticationSessions().size());
+            //assertThat(rootAuthSession.getAuthenticationSessions().keySet(), Matchers.containsInAnyOrder(tabIds.toArray()));
+        });
     }
 
     private void multipleTabsParallelLogin(BrowserTabUtil tabUtil) {

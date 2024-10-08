@@ -24,9 +24,13 @@ import org.keycloak.common.util.Time;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.sessions.infinispan.changes.RootAuthenticationSessionUpdateTask;
+import org.keycloak.models.sessions.infinispan.changes.SessionUpdateTask;
 import org.keycloak.models.sessions.infinispan.entities.AuthenticationSessionEntity;
 import org.keycloak.models.sessions.infinispan.entities.RootAuthenticationSessionEntity;
+import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanAuthenticationSessionProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.sessions.AuthenticationSessionProvider;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 
 import java.util.Comparator;
@@ -44,26 +48,51 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
     private final KeycloakSession session;
     private final RealmModel realm;
     private final int authSessionsLimit;
-    private final SessionEntityUpdater<RootAuthenticationSessionEntity> updater;
+    private final AuthenticationSessionProvider provider;
+
+    private final RootAuthenticationSessionEntity entity;
+
     private final static Comparator<Map.Entry<String, AuthenticationSessionEntity>> TIMESTAMP_COMPARATOR =
             Comparator.comparingInt(e -> e.getValue().getTimestamp());
 
-    public RootAuthenticationSessionAdapter(KeycloakSession session, SessionEntityUpdater<RootAuthenticationSessionEntity> updater, RealmModel realm,
-                                            int authSessionsLimit) {
+    public RootAuthenticationSessionAdapter(KeycloakSession session, AuthenticationSessionProvider provider, RealmModel realm, RootAuthenticationSessionEntity entity, int authSessionsLimit) {
         this.session = session;
-        this.updater = updater;
+        this.provider = provider;
+        this.entity = entity;
         this.realm = realm;
         this.authSessionsLimit = authSessionsLimit;
     }
 
-    void update() {
-        updater.onEntityUpdated();
+    void update(RootAuthenticationSessionUpdateTask task) {
+        if (provider instanceof InfinispanAuthenticationSessionProvider) {
+            ((InfinispanAuthenticationSessionProvider) provider).getRoootAuthSessionTransaction().addTask(entity.getId(), task);
+        }
+        else if (provider instanceof RemoteInfinispanAuthenticationSessionProvider) {
+            task.runUpdate(entity);
+            ((RemoteInfinispanAuthenticationSessionProvider) provider).update(entity, realm);
+        }
+    }
+
+    void update(String tabId, AuthenticationSessionEntity authenticationSession) {
+
+        if(provider instanceof InfinispanAuthenticationSessionProvider) {
+            ((InfinispanAuthenticationSessionProvider) provider).getRoootAuthSessionTransaction().addTask(entity.getId(), new RootAuthenticationSessionUpdateTask() {
+                @Override
+                public void runUpdate(RootAuthenticationSessionEntity entity) {
+                    entity.getAuthenticationSessions().put(tabId, authenticationSession);
+                }
+            });
+        }
+        else if (provider instanceof RemoteInfinispanAuthenticationSessionProvider) {
+            entity.getAuthenticationSessions().put(tabId, authenticationSession);
+            ((RemoteInfinispanAuthenticationSessionProvider) provider).update(entity, realm);
+        }
     }
 
 
     @Override
     public String getId() {
-        return updater.getEntity().getId();
+        return entity.getId();
     }
 
     @Override
@@ -73,20 +102,25 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
 
     @Override
     public int getTimestamp() {
-        return updater.getEntity().getTimestamp();
+        return entity.getTimestamp();
     }
 
     @Override
     public void setTimestamp(int timestamp) {
-        updater.getEntity().setTimestamp(timestamp);
-        update();
+        RootAuthenticationSessionUpdateTask task = new RootAuthenticationSessionUpdateTask() {
+            @Override
+            public void runUpdate(RootAuthenticationSessionEntity entity) {
+                entity.setTimestamp(timestamp);
+            }
+        };
+        update(task);
     }
 
     @Override
     public Map<String, AuthenticationSessionModel> getAuthenticationSessions() {
         Map<String, AuthenticationSessionModel> result = new HashMap<>();
 
-        for (Map.Entry<String, AuthenticationSessionEntity> entry : updater.getEntity().getAuthenticationSessions().entrySet()) {
+        for (Map.Entry<String, AuthenticationSessionEntity> entry : entity.getAuthenticationSessions().entrySet()) {
             String tabId = entry.getKey();
             result.put(tabId , new AuthenticationSessionAdapter(session, this, tabId, entry.getValue()));
         }
@@ -113,53 +147,72 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
     public AuthenticationSessionModel createAuthenticationSession(ClientModel client) {
         Objects.requireNonNull(client, "client");
 
-        Map<String, AuthenticationSessionEntity> authenticationSessions = updater.getEntity().getAuthenticationSessions();
-        if (authenticationSessions.size() >= authSessionsLimit) {
-            String tabId = authenticationSessions.entrySet().stream().min(TIMESTAMP_COMPARATOR).map(Map.Entry::getKey).orElse(null);
-
-            if (tabId != null) {
-                log.debugf("Reached limit (%s) of active authentication sessions per a root authentication session. Removing oldest authentication session with TabId %s.", authSessionsLimit, tabId);
-
-                // remove the oldest authentication session
-                authenticationSessions.remove(tabId);
-            }
-        }
-
         AuthenticationSessionEntity authSessionEntity = new AuthenticationSessionEntity();
         authSessionEntity.setClientUUID(client.getId());
-
-        int timestamp = Time.currentTime();
-        authSessionEntity.setTimestamp(timestamp);
-
         String tabId = Base64Url.encode(SecretGenerator.getInstance().randomBytes(8));
-        authenticationSessions.put(tabId, authSessionEntity);
+        int timestamp = Time.currentTime();
 
-        // Update our timestamp when adding new authenticationSession
-        updater.getEntity().setTimestamp(timestamp);
+        RootAuthenticationSessionUpdateTask task = new RootAuthenticationSessionUpdateTask() {
+            @Override
+            public void runUpdate(RootAuthenticationSessionEntity entity) {
 
-        update();
+
+                Map<String, AuthenticationSessionEntity> authenticationSessions = entity.getAuthenticationSessions();
+                if (authenticationSessions.size() >= authSessionsLimit) {
+                    String tabId = authenticationSessions.entrySet().stream().min(TIMESTAMP_COMPARATOR).map(Map.Entry::getKey).orElse(null);
+
+                    if (tabId != null) {
+                        log.debugf("Reached limit (%s) of active authentication sessions per a root authentication session. Removing oldest authentication session with TabId %s.", authSessionsLimit, tabId);
+
+                        // remove the oldest authentication session
+                        authenticationSessions.remove(tabId);
+                    }
+                }
+                authSessionEntity.setTimestamp(timestamp);
+                authenticationSessions.put(tabId, authSessionEntity);
+
+                // Update our timestamp when adding new authenticationSession
+                entity.setTimestamp(timestamp);
+            }
+        };
+
+        update(task);
 
         AuthenticationSessionAdapter authSession = new AuthenticationSessionAdapter(session, this, tabId, authSessionEntity);
         session.getContext().setAuthenticationSession(authSession);
         return authSession;
+
     }
 
     @Override
     public void removeAuthenticationSessionByTabId(String tabId) {
-        if (updater.getEntity().getAuthenticationSessions().remove(tabId) != null) {
-            if (updater.getEntity().getAuthenticationSessions().isEmpty()) {
-                updater.onEntityRemoved();
+        if (entity.getAuthenticationSessions().remove(tabId) != null) {
+            if (entity.getAuthenticationSessions().isEmpty()) {
+                provider.removeRootAuthenticationSession(realm, this);
             } else {
-                updater.getEntity().setTimestamp(Time.currentTime());
-                update();
+                RootAuthenticationSessionUpdateTask task = new RootAuthenticationSessionUpdateTask() {
+                    @Override
+                    public void runUpdate(RootAuthenticationSessionEntity entity) {
+                        entity.setTimestamp(Time.currentTime());
+                    }
+                };
+                update(task);
             }
         }
     }
 
     @Override
     public void restartSession(RealmModel realm) {
-        updater.getEntity().getAuthenticationSessions().clear();
-        updater.getEntity().setTimestamp(Time.currentTime());
-        update();
+
+        RootAuthenticationSessionUpdateTask task = new RootAuthenticationSessionUpdateTask() {
+            @Override
+            public void runUpdate(RootAuthenticationSessionEntity entity) {
+                entity.getAuthenticationSessions().clear();
+                entity.setTimestamp(Time.currentTime());
+            }
+        };
+        update(task);
+
+
     }
 }

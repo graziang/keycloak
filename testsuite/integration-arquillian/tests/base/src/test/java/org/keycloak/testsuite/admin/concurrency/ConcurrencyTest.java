@@ -193,6 +193,7 @@ public class ConcurrencyTest extends AbstractConcurrencyTest {
 
             c = client.toRepresentation();
             assertNotNull(c);
+            System.out.println("nameeee:" + name);
             assertTrue("Client " + name + " not found in client list",
               clients.findAll().stream()
                 .map(ClientRepresentation::getClientId)
