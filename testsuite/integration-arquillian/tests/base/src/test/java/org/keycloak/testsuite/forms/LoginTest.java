@@ -911,7 +911,7 @@ public class LoginTest extends AbstractTestRealmKeycloakTest {
         Assert.assertEquals((Integer) 1, getTestingClient().testing().getAuthenticationSessionTabsCount("test", authSessionId));
 
         // authentication session should be expired after 1 minute
-        setTimeOffset(300);
+        setTimeOffset(1800);
         Assert.assertEquals((Integer) 0, getTestingClient().testing().getAuthenticationSessionTabsCount("test", authSessionId));
     }
 

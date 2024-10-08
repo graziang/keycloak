@@ -117,7 +117,16 @@ public class RemoteInfinispanAuthenticationSessionProvider implements Authentica
     }
 
     private RootAuthenticationSessionAdapter wrap(RealmModel realm, RootAuthenticationSessionEntity entity) {
-        return entity == null ? null : new RootAuthenticationSessionAdapter(session, new RootAuthenticationSessionUpdater(realm, entity, transaction), realm, authSessionsLimit);
+        return entity == null ? null : new RootAuthenticationSessionAdapter(session, this, realm, entity, authSessionsLimit);
+    }
+
+    public void update(RootAuthenticationSessionEntity entity, RealmModel realm) {
+        int expirationSeconds = entity.getTimestamp() - Time.currentTime() + SessionExpiration.getAuthSessionLifespan(realm);
+        transaction.replace(entity.getId(), entity, expirationSeconds, TimeUnit.SECONDS);
+    }
+
+    public void remove(RootAuthenticationSessionEntity entity) {
+        transaction.remove(entity.getId());
     }
 
     private record RootAuthenticationSessionUpdater(RealmModel realm, RootAuthenticationSessionEntity entity,

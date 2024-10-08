@@ -57,7 +57,7 @@ public class AuthenticationSessionAdapter implements AuthenticationSessionModel 
     }
 
     private void update() {
-        parent.update();
+        parent.update(tabId, entity);
     }
 
     @Override
