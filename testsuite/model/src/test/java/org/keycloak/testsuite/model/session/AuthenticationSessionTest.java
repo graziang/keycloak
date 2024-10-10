@@ -208,7 +208,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
         });
         ConcurrentHashMap.KeySetView<String, Boolean> tabIds = ConcurrentHashMap.newKeySet();
         inIndependentFactories(4, 60, () -> {
-            log.info("FUORI: INIZIO CURRENT");
+                log.info("FUORI: INIZIO CURRENT");
                 withRealm(realmId, (session, realm) -> {
                     log.info("DENTRO: INIZIO CURRENT");
                     RootAuthenticationSessionModel rootAuthSession = session.authenticationSessions().getRootAuthenticationSession(realm, rootId);
@@ -218,7 +218,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
                     log.info("DENTRO: FINE CURRENT");
                     return null;
                 });
-            log.info("FUORI: FINE CURRENT");
+                log.info("FUORI: FINE CURRENT");
         });
 
         withRealm(realmId, (session, realm) -> {

@@ -48,14 +48,14 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
     private final KeycloakSession session;
     private final RealmModel realm;
     private final int authSessionsLimit;
-    private final AuthenticationSessionProvider provider;
+    private final InfinispanAuthenticationSessionProvider provider;
 
     private final RootAuthenticationSessionEntity entity;
 
     private final static Comparator<Map.Entry<String, AuthenticationSessionEntity>> TIMESTAMP_COMPARATOR =
             Comparator.comparingInt(e -> e.getValue().getTimestamp());
 
-    public RootAuthenticationSessionAdapter(KeycloakSession session, AuthenticationSessionProvider provider, RealmModel realm, RootAuthenticationSessionEntity entity, int authSessionsLimit) {
+    public RootAuthenticationSessionAdapter(KeycloakSession session, InfinispanAuthenticationSessionProvider provider, RealmModel realm, RootAuthenticationSessionEntity entity, int authSessionsLimit) {
         this.session = session;
         this.provider = provider;
         this.entity = entity;
@@ -64,31 +64,8 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
     }
 
     void update(RootAuthenticationSessionUpdateTask task) {
-        if (provider instanceof InfinispanAuthenticationSessionProvider) {
-            ((InfinispanAuthenticationSessionProvider) provider).getRoootAuthSessionTransaction().addTask(entity.getId(), task);
-        }
-        else if (provider instanceof RemoteInfinispanAuthenticationSessionProvider) {
-            task.runUpdate(entity);
-            ((RemoteInfinispanAuthenticationSessionProvider) provider).update(entity, realm);
-        }
+        provider.getRoootAuthSessionTransaction().addTask(entity.getId(), task);
     }
-
-    void update(String tabId, AuthenticationSessionEntity authenticationSession) {
-
-        if(provider instanceof InfinispanAuthenticationSessionProvider) {
-            ((InfinispanAuthenticationSessionProvider) provider).getRoootAuthSessionTransaction().addTask(entity.getId(), new RootAuthenticationSessionUpdateTask() {
-                @Override
-                public void runUpdate(RootAuthenticationSessionEntity entity) {
-                    entity.getAuthenticationSessions().put(tabId, authenticationSession);
-                }
-            });
-        }
-        else if (provider instanceof RemoteInfinispanAuthenticationSessionProvider) {
-            entity.getAuthenticationSessions().put(tabId, authenticationSession);
-            ((RemoteInfinispanAuthenticationSessionProvider) provider).update(entity, realm);
-        }
-    }
-
 
     @Override
     public String getId() {
@@ -122,7 +99,7 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
 
         for (Map.Entry<String, AuthenticationSessionEntity> entry : entity.getAuthenticationSessions().entrySet()) {
             String tabId = entry.getKey();
-            result.put(tabId , new AuthenticationSessionAdapter(session, this, tabId, entry.getValue()));
+            result.put(tabId , new AuthenticationSessionAdapter(session, this, new AuthenticationSessionUpdater(this, tabId, entry.getValue()), tabId, entry.getValue()));
         }
 
         return result;
@@ -178,7 +155,7 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
 
         update(task);
 
-        AuthenticationSessionAdapter authSession = new AuthenticationSessionAdapter(session, this, tabId, authSessionEntity);
+        AuthenticationSessionAdapter authSession = new AuthenticationSessionAdapter(session, this, new AuthenticationSessionUpdater(this, tabId, authSessionEntity), tabId, authSessionEntity);
         session.getContext().setAuthenticationSession(authSession);
         return authSession;
 
@@ -214,5 +191,29 @@ public class RootAuthenticationSessionAdapter implements RootAuthenticationSessi
         update(task);
 
 
+    }
+
+    private record AuthenticationSessionUpdater(RootAuthenticationSessionAdapter adapter, String tabId, AuthenticationSessionEntity authenticationSession) implements SessionEntityUpdater<AuthenticationSessionEntity> {
+
+        @Override
+        public AuthenticationSessionEntity getEntity() {
+            return authenticationSession;
+        }
+
+        @Override
+        public void onEntityUpdated() {
+            RootAuthenticationSessionUpdateTask task = new RootAuthenticationSessionUpdateTask() {
+                @Override
+                public void runUpdate(RootAuthenticationSessionEntity entity) {
+                    entity.getAuthenticationSessions().put(tabId, authenticationSession);
+                }
+            };
+            adapter.update(task);
+        }
+
+        @Override
+        public void onEntityRemoved() {
+
+        }
     }
 }
