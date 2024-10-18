@@ -31,6 +31,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.sessions.infinispan.CacheDecorators;
+import org.keycloak.models.sessions.infinispan.RemoveFunction;
 import org.keycloak.models.sessions.infinispan.SessionFunction;
 import org.keycloak.models.sessions.infinispan.entities.SessionEntity;
 import org.keycloak.models.sessions.infinispan.remotestore.RemoteCacheInvoker;
@@ -56,18 +57,27 @@ public class InfinispanChangelogBasedTransaction<K, V extends SessionEntity> ext
     protected final Map<K, SessionUpdatesList<V>> updates = new HashMap<>();
 
     protected final SessionFunction<V> lifespanMsLoader;
+
     protected final SessionFunction<V> maxIdleTimeMsLoader;
     private final SerializeExecutionsByKey<K> serializer;
 
+    protected final RemoveFunction<V> removeFunction;
+
     public InfinispanChangelogBasedTransaction(KeycloakSession kcSession, Cache<K, SessionEntityWrapper<V>> cache, RemoteCacheInvoker remoteCacheInvoker,
-                                               SessionFunction<V> lifespanMsLoader, SessionFunction<V> maxIdleTimeMsLoader, SerializeExecutionsByKey<K> serializer) {
+                                               SessionFunction<V> lifespanMsLoader, SessionFunction<V> maxIdleTimeMsLoader, RemoveFunction<V> removeFunction, SerializeExecutionsByKey<K> serializer) {
         this.kcSession = kcSession;
         this.cacheName = cache.getName();
         this.cache = cache;
         this.remoteCacheInvoker = remoteCacheInvoker;
         this.lifespanMsLoader = lifespanMsLoader;
+        this.removeFunction = removeFunction;
         this.maxIdleTimeMsLoader = maxIdleTimeMsLoader;
         this.serializer = serializer;
+    }
+
+    public InfinispanChangelogBasedTransaction(KeycloakSession kcSession, Cache<K, SessionEntityWrapper<V>> cache, RemoteCacheInvoker remoteCacheInvoker,
+                                               SessionFunction<V> lifespanMsLoader, SessionFunction<V> maxIdleTimeMsLoader, SerializeExecutionsByKey<K> serializer) {
+        this(kcSession, cache, remoteCacheInvoker, lifespanMsLoader, maxIdleTimeMsLoader, null, serializer);
     }
 
 
@@ -238,6 +248,14 @@ public class InfinispanChangelogBasedTransaction<K, V extends SessionEntity> ext
             var writeCache = CacheDecorators.skipCacheStoreIfRemoteCacheIsEnabled(cache);
             while (iteration++ < InfinispanUtil.MAXIMUM_REPLACE_RETRIES) {
                 SessionEntityWrapper<V> newVersionEntity = generateNewVersionAndWrapEntity(session, oldVersion.getLocalMetadata());
+
+                if (removeFunction != null && removeFunction.apply(newVersionEntity.getEntity())) {
+                    CacheDecorators.skipCacheStoreIfRemoteCacheIsEnabled(cache)
+                            .withFlags(Flag.IGNORE_RETURN_VALUES)
+                            .remove(key);
+                    return;
+                }
+
                 returnValue = writeCache.computeIfPresent(key, new ReplaceFunction<>(oldVersion.getVersion(), newVersionEntity), lifespanMs, TimeUnit.MILLISECONDS, maxIdleTimeMs, TimeUnit.MILLISECONDS);
 
                 if (returnValue == null) {

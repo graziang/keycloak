@@ -63,7 +63,10 @@ public class InfinispanAuthenticationSessionProvider implements AuthenticationSe
         this.authSessionsLimit = authSessionsLimit;
 
         this.cache = cache;
-        this.sessionTx = new InfinispanChangelogBasedTransaction<>(session, cache, remoteCacheInvoker, SessionTimeouts::getAuthSessionLifespanMS, SessionTimeouts::getAuthSessionMaxIdleMS, serializer);
+
+        RemoveFunction<RootAuthenticationSessionEntity> removeFunction = entity -> entity.getAuthenticationSessions().isEmpty();
+
+        this.sessionTx = new InfinispanChangelogBasedTransaction<>(session, cache, remoteCacheInvoker, SessionTimeouts::getAuthSessionLifespanMS, SessionTimeouts::getAuthSessionMaxIdleMS, removeFunction, serializer);
         this.clusterEventsSenderTx = new SessionEventsSenderTransaction(session);
 
         session.getTransactionManager().enlistAfterCompletion(sessionTx);

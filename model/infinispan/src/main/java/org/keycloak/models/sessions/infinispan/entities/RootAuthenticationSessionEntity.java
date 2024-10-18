@@ -26,6 +26,7 @@ import org.keycloak.marshalling.Marshalling;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
@@ -94,7 +95,7 @@ public class RootAuthenticationSessionEntity extends SessionEntity {
 
     @Override
     public String toString() {
-        return String.format("RootAuthenticationSessionEntity [ id=%s, realm=%s ]", getId(), getRealmId());
+        return String.format("RootAuthenticationSessionEntity [ id=%s, realm=%s, sessions=[%s] ]", getId(), getRealmId(), String.join(",", getAuthenticationSessions().keySet()));
     }
 
 }
