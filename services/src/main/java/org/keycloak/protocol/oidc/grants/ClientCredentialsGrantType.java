@@ -37,6 +37,7 @@ import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.services.CorsErrorResponseException;
 import org.keycloak.services.Urls;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
+import org.keycloak.services.clientpolicy.context.GrantTypeContext;
 import org.keycloak.services.clientpolicy.context.ServiceAccountTokenRequestContext;
 import org.keycloak.services.clientpolicy.context.ServiceAccountTokenResponseContext;
 import org.keycloak.services.managers.AuthenticationManager;
@@ -128,6 +129,7 @@ public class ClientCredentialsGrantType extends OAuth2GrantTypeBase {
         userSession.setNote(ServiceAccountConstants.CLIENT_ADDRESS, clientConnection.getRemoteAddr());
 
         try {
+            session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.CLIENT_CREDENTIALS));
             session.clientPolicy().triggerOnEvent(new ServiceAccountTokenRequestContext(formParams, clientSessionCtx.getClientSession()));
         } catch (ClientPolicyException cpe) {
             event.detail(Details.REASON, cpe.getErrorDetail());

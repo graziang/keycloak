@@ -46,6 +46,7 @@ import org.keycloak.services.ErrorPageException;
 import org.keycloak.services.Urls;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.clientpolicy.context.AuthorizationRequestContext;
+import org.keycloak.services.clientpolicy.context.GrantTypeContext;
 import org.keycloak.services.clientpolicy.context.PreAuthorizationRequestContext;
 import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.messages.Messages;
@@ -197,6 +198,16 @@ public class AuthorizationEndpoint extends AuthorizationEndpointBase {
         authenticationSession = createAuthenticationSession(client, request.getState());
 
         try {
+            if (parsedResponseType.hasResponseType(OIDCResponseType.CODE)) {
+                session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.AUTHORIZATION_CODE));
+            }
+            else if (parsedResponseType.isImplicitFlow()) {
+                session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.IMPLICIT));
+            }
+            else if (parsedResponseType.isImplicitOrHybridFlow()) {
+                session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.AUTHORIZATION_CODE));
+                session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.IMPLICIT));
+            }
             session.clientPolicy().triggerOnEvent(new AuthorizationRequestContext(parsedResponseType, request, redirectUri, params, authenticationSession));
         } catch (ClientPolicyException cpe) {
             new AuthenticationSessionManager(session).removeAuthenticationSession(realm, authenticationSession, false);

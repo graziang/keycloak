@@ -34,6 +34,7 @@ import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.services.CorsErrorResponseException;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
+import org.keycloak.services.clientpolicy.context.GrantTypeContext;
 import org.keycloak.services.clientpolicy.context.TokenRefreshContext;
 import org.keycloak.services.clientpolicy.context.TokenRefreshResponseContext;
 import org.keycloak.services.util.MtlsHoKTokenUtil;
@@ -60,6 +61,7 @@ public class RefreshTokenGrantType extends OAuth2GrantTypeBase {
         String scopeParameter = getRequestedScopes();
 
         try {
+            session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.REFRESH_TOKEN));
             session.clientPolicy().triggerOnEvent(new TokenRefreshContext(formParams));
             refreshToken = formParams.getFirst(OAuth2Constants.REFRESH_TOKEN);
         } catch (ClientPolicyException cpe) {

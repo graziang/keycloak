@@ -40,6 +40,7 @@ import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.services.CorsErrorResponseException;
 import org.keycloak.services.Urls;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
+import org.keycloak.services.clientpolicy.context.GrantTypeContext;
 import org.keycloak.services.clientpolicy.context.ResourceOwnerPasswordCredentialsContext;
 import org.keycloak.services.clientpolicy.context.ResourceOwnerPasswordCredentialsResponseContext;
 import org.keycloak.services.managers.AuthenticationManager;
@@ -79,6 +80,7 @@ public class ResourceOwnerPasswordCredentialsGrantType extends OAuth2GrantTypeBa
         }
 
         try {
+            session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.PASSWORD));
             session.clientPolicy().triggerOnEvent(new ResourceOwnerPasswordCredentialsContext(formParams));
         } catch (ClientPolicyException cpe) {
             event.detail(Details.REASON, cpe.getErrorDetail());

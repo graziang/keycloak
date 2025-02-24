@@ -54,6 +54,7 @@ import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.services.CorsErrorResponseException;
 import org.keycloak.services.ErrorResponseException;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
+import org.keycloak.services.clientpolicy.context.GrantTypeContext;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.resources.RealmsResource;
 import org.keycloak.services.util.DefaultClientSessionContext;
@@ -331,6 +332,7 @@ public class DeviceGrantType extends OAuth2GrantTypeBase {
         }
 
         try {
+            session.clientPolicy().triggerOnEvent(new GrantTypeContext(OAuth2Constants.DEVICE_CODE_GRANT_TYPE));
             session.clientPolicy().triggerOnEvent(new DeviceTokenRequestContext(deviceCodeModel, formParams));
         } catch (ClientPolicyException cpe) {
             event.detail(Details.REASON, cpe.getErrorDetail());
