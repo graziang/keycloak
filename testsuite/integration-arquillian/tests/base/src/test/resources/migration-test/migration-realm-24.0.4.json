@@ -860,7 +860,9 @@
     "publicClient" : true,
     "frontchannelLogout" : false,
     "protocol" : "openid-connect",
-    "attributes" : { },
+    "attributes" : {
+      "client.use.lightweight.access.token.enabled":"true"
+    },
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : false,
     "nodeReRegistrationTimeout" : 0,
@@ -2752,7 +2754,8 @@
     "frontchannelLogout" : false,
     "protocol" : "openid-connect",
     "attributes" : {
-      "post.logout.redirect.uris" : "+"
+      "post.logout.redirect.uris" : "+",
+      "client.use.lightweight.access.token.enabled":"true"
     },
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : false,
@@ -4591,7 +4594,8 @@
     "frontchannelLogout" : false,
     "protocol" : "openid-connect",
     "attributes" : {
-      "post.logout.redirect.uris" : "+"
+      "post.logout.redirect.uris" : "+",
+      "client.use.lightweight.access.token.enabled":"true"
     },
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : false,
