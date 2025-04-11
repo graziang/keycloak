@@ -1441,6 +1441,44 @@ public class ResetPasswordTest extends AbstractTestRealmKeycloakTest {
         assertEquals("test", resetPasswordPage.getUsername());
     }
 
+    @Test
+    public void resetPasswordUnverifiedEmail() throws IOException, MessagingException {
+
+        RealmRepresentation realmRep = testRealm().toRepresentation();
+        realmRep.setVerifyEmail(true);
+        testRealm().update(realmRep);
+
+        UserResource user = testRealm().users().get(defaultUser.getId());
+        UserRepresentation userRep = user.toRepresentation();
+        userRep.setEmailVerified(false);
+        user.update(userRep);
+
+        String username = "login-test";
+        String resetUri = oauth.AUTH_SERVER_ROOT + "/realms/test/login-actions/reset-credentials";
+
+        openResetPasswordUrlAndDoFlow(resetUri, "account", oauth.AUTH_SERVER_ROOT + "/realms/test/account/", false);
+
+        AccountHelper.logout(testRealm(), username);
+        WaitUtils.waitForPageToLoad();
+
+        TestAppHelper testAppHelper = new TestAppHelper(oauth, loginPage, appPage);
+        testAppHelper.login(username, "resetPassword");
+
+        appPage.assertCurrent();
+
+        assertEquals(RequestType.AUTH_RESPONSE, appPage.getRequestType());
+
+
+        user = testRealm().users().get(defaultUser.getId());
+        userRep = user.toRepresentation();
+        assertTrue(userRep.isEmailVerified());
+
+        realmRep = testRealm().toRepresentation();
+        realmRep.setVerifyEmail(false);
+        testRealm().update(realmRep);
+    }
+
+
     private void changePasswordOnUpdatePage(WebDriver driver) {
         assertThat(driver.getPageSource(), Matchers.containsString("You need to change your password."));
 

@@ -64,6 +64,11 @@ public class ResetCredentialsActionTokenHandler extends AbstractActionTokenHandl
     public Response handleToken(ResetCredentialsActionToken token, ActionTokenContext tokenContext) {
         AuthenticationProcessor authProcessor = new ResetCredsAuthenticationProcessor();
 
+        UserModel user = tokenContext.getAuthenticationSession().getAuthenticatedUser();
+        if (tokenContext.getSession().getContext().getRealm().isVerifyEmail() && !user.isEmailVerified()) {
+            user.setEmailVerified(true);
+        }
+
         return tokenContext.processFlow(
           false,
           RESET_CREDENTIALS_PATH,
