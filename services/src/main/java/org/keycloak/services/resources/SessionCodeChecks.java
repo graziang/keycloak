@@ -430,6 +430,8 @@ public class SessionCodeChecks {
 
         try {
             authSession = RestartLoginCookie.restartSession(session, realm, existingRootSession, clientId, cook);
+            ClientData clientData = ClientData.decodeClientDataFromParameter(clientDataString);
+            authSession.setRedirectUri(clientData.getRedirectUri());
         } catch (Exception e) {
             ServicesLogger.LOGGER.failedToParseRestartLoginCookie(e);
         }
