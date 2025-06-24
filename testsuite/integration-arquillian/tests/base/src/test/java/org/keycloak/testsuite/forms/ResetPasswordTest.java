@@ -22,6 +22,8 @@ import org.jboss.arquillian.drone.api.annotation.Drone;
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.authentication.actiontoken.resetcred.ResetCredentialsActionToken;
+import org.keycloak.authentication.authenticators.browser.PasswordFormFactory;
+import org.keycloak.authentication.authenticators.browser.UsernameFormFactory;
 import org.keycloak.authentication.authenticators.resetcred.ResetCredentialEmail;
 import org.jboss.arquillian.graphene.page.Page;
 import org.keycloak.common.constants.ServiceAccountConstants;
@@ -59,10 +61,13 @@ import org.keycloak.testsuite.pages.InfoPage;
 import org.keycloak.testsuite.pages.LoginPage;
 import org.keycloak.testsuite.pages.LoginPasswordResetPage;
 import org.keycloak.testsuite.pages.LoginPasswordUpdatePage;
+import org.keycloak.testsuite.pages.LoginUsernameOnlyPage;
 import org.keycloak.testsuite.pages.LogoutConfirmPage;
+import org.keycloak.testsuite.pages.PasswordPage;
 import org.keycloak.testsuite.pages.VerifyEmailPage;
 import org.keycloak.testsuite.updaters.ClientAttributeUpdater;
 import org.keycloak.testsuite.util.BrowserTabUtil;
+import org.keycloak.testsuite.util.FlowUtil;
 import org.keycloak.testsuite.util.GreenMailRule;
 import org.keycloak.testsuite.util.InfinispanTestTimeServiceRule;
 import org.keycloak.testsuite.util.KerberosUtils;
@@ -164,6 +169,12 @@ public class ResetPasswordTest extends AbstractTestRealmKeycloakTest {
 
     @Page
     protected LogoutConfirmPage logoutConfirmPage;
+
+    @Page
+    protected LoginUsernameOnlyPage loginUsernameOnlyPage;
+
+    @Page
+    protected PasswordPage passwordPage;
 
     @Rule
     public AssertEvents events = new AssertEvents(this);
@@ -1443,6 +1454,45 @@ public class ResetPasswordTest extends AbstractTestRealmKeycloakTest {
         resetPasswordPage.assertCurrent();
 
         assertEquals("test", resetPasswordPage.getUsername());
+    }
+
+    @Test
+    public void resetPasswordWithSeparatedUsernamePasswordForm() {
+        String newFlowAlias = "browser - username then password";
+
+        UserRepresentation user2 = UserBuilder.create()
+                .username("login-test-2")
+                .email("login-2@test.com")
+                .enabled(true)
+                .build();
+        String user2Id = ApiUtil.createUserWithAdminClient(testRealm(), user2);
+
+        //create username then password only flow
+        testingClient.server("test").run(session -> FlowUtil.inCurrentRealm(session).copyBrowserFlow(newFlowAlias));
+        testingClient.server("test").run(session -> FlowUtil.inCurrentRealm(session)
+                .selectFlow(newFlowAlias)
+                .clear()
+                .addAuthenticatorExecution(AuthenticationExecutionModel.Requirement.REQUIRED, UsernameFormFactory.PROVIDER_ID)
+                .addAuthenticatorExecution(AuthenticationExecutionModel.Requirement.REQUIRED, PasswordFormFactory.PROVIDER_ID)
+                .defineAsBrowserFlow() // Activate this new flow
+        );
+
+        loginUsernameOnlyPage.open();
+        loginUsernameOnlyPage.login("test-user@localhost");
+
+        passwordPage.assertCurrent();
+        passwordPage.clickResetPassword();
+        resetPasswordPage.assertCurrent();
+        resetPasswordPage.changePassword("login-test-2");
+        WaitUtils.waitForPageToLoad();
+
+        assertEquals("You should receive an email shortly with further instructions.", loginPage.getSuccessMessage());
+
+        RealmRepresentation realm = testRealm().toRepresentation();
+        realm.setBrowserFlow(DefaultAuthenticationFlows.BROWSER_FLOW);
+        testRealm().update(realm);
+
+        testRealm().users().delete(user2Id);
     }
 
     private void changePasswordOnUpdatePage(WebDriver driver) {

@@ -126,6 +126,7 @@ public class ResetCredentialChooseUser implements Authenticator, AuthenticatorFa
                     .user(user).error(Errors.USER_DISABLED);
             context.clearUser();
         } else {
+            context.clearUser();
             context.setUser(user);
         }
 
