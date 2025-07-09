@@ -709,9 +709,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
     @Override
     public boolean isIssuer(String issuer, MultivaluedMap<String, String> params) {
         if (!supportsExternalExchange()) return false;
-        String requestedIssuer = params.getFirst(OAuth2Constants.SUBJECT_ISSUER);
-        if (requestedIssuer == null) requestedIssuer = issuer;
-        return requestedIssuer.equals(getConfig().getAlias());
+        return issuer.equals(getConfig().getAlias());
     }
 
     @Override
@@ -876,11 +874,6 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
         String subjectTokenType = params.getFirst(OAuth2Constants.SUBJECT_TOKEN_TYPE);
         if (subjectTokenType == null) {
             subjectTokenType = OAuth2Constants.ACCESS_TOKEN_TYPE;
-        }
-        if (!OAuth2Constants.ACCESS_TOKEN_TYPE.equals(subjectTokenType)) {
-            event.detail(Details.REASON, OAuth2Constants.SUBJECT_TOKEN_TYPE + " invalid");
-            event.error(Errors.INVALID_TOKEN_TYPE);
-            throw new ErrorResponseException(OAuthErrorException.INVALID_TOKEN, "invalid token type", Response.Status.BAD_REQUEST);
         }
         return validateExternalTokenThroughUserInfo(event, subjectToken, subjectTokenType);
     }

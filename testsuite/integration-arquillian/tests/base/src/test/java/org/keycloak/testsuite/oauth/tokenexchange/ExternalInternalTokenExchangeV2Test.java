@@ -42,6 +42,7 @@ import org.keycloak.authorization.model.Policy;
 import org.keycloak.authorization.model.ResourceServer;
 import org.keycloak.common.Profile;
 import org.keycloak.models.ClientModel;
+import org.keycloak.models.Constants;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.models.KeycloakSession;
@@ -274,7 +275,7 @@ public class ExternalInternalTokenExchangeV2Test extends AbstractInitializedBase
         try (Client httpClient = AdminClientUtil.createResteasyClient()) {
             WebTarget exchangeUrl = getConsumerTokenEndpoint(httpClient);
 
-            String subjectTokenType = OAuth2Constants.ACCESS_TOKEN_TYPE; // hardcoded to access-token just for now. More types might need to be tested...
+            String subjectTokenType = Constants.TOKEN_EXCHANGE_EXTERNAL_IDP_URN_PREFIX + bc.getIDPAlias();
             try (Response response = sendExternalInternalTokenExchangeRequest(exchangeUrl, subjectToken, subjectTokenType)) {
                 tokenExchangeResponseConsumer.accept(response);
             }
@@ -290,7 +291,6 @@ public class ExternalInternalTokenExchangeV2Test extends AbstractInitializedBase
                                 .param(OAuth2Constants.GRANT_TYPE, OAuth2Constants.TOKEN_EXCHANGE_GRANT_TYPE)
                                 .param(OAuth2Constants.SUBJECT_TOKEN, subjectToken)
                                 .param(OAuth2Constants.SUBJECT_TOKEN_TYPE, subjectTokenType)
-                                .param(OAuth2Constants.SUBJECT_ISSUER, bc.getIDPAlias())
                                 .param(OAuth2Constants.SCOPE, OAuth2Constants.SCOPE_OPENID)
 
                 ));

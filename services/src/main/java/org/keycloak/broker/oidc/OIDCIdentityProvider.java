@@ -785,9 +785,7 @@ public class OIDCIdentityProvider extends AbstractOAuth2IdentityProvider<OIDCIde
     @Override
     public boolean isIssuer(String issuer, MultivaluedMap<String, String> params) {
         if (!supportsExternalExchange()) return false;
-        String requestedIssuer = params == null ? null : params.getFirst(OAuth2Constants.SUBJECT_ISSUER);
-        if (requestedIssuer == null) requestedIssuer = issuer;
-        if (requestedIssuer.equals(getConfig().getAlias())) return true;
+        if (issuer.equals(getConfig().getAlias())) return true;
 
         String trustedIssuers = getConfig().getIssuer();
 
@@ -795,7 +793,7 @@ public class OIDCIdentityProvider extends AbstractOAuth2IdentityProvider<OIDCIde
             String[] issuers = trustedIssuers.split(",");
 
             for (String trustedIssuer : issuers) {
-                if (requestedIssuer.equals(trustedIssuer.trim())) {
+                if (issuer.equals(trustedIssuer.trim())) {
                     return true;
                 }
             }

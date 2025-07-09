@@ -18,7 +18,6 @@ package org.keycloak.social.google;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.ws.rs.core.Response;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.broker.oidc.OIDCIdentityProvider;
 import org.keycloak.broker.oidc.OIDCIdentityProviderConfig;
@@ -90,9 +89,7 @@ public class GoogleIdentityProvider extends OIDCIdentityProvider implements Soci
 
     @Override
     public boolean isIssuer(String issuer, MultivaluedMap<String, String> params) {
-        String requestedIssuer = params.getFirst(OAuth2Constants.SUBJECT_ISSUER);
-        if (requestedIssuer == null) requestedIssuer = issuer;
-        return requestedIssuer.equals(getConfig().getAlias());
+        return issuer.equals(getConfig().getAlias());
     }
 
 

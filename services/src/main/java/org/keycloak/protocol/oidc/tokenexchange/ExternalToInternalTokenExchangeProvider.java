@@ -24,12 +24,22 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.provider.IdentityProvider;
+import org.keycloak.common.enums.SslRequired;
+import org.keycloak.common.util.UriUtils;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.jose.jws.JWSInputException;
+import org.keycloak.models.Constants;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.TokenExchangeContext;
+import org.keycloak.representations.JsonWebToken;
 import org.keycloak.services.CorsErrorResponseException;
+import org.keycloak.services.Urls;
 import org.keycloak.services.managers.UserSessionManager;
 
 import java.util.Arrays;
@@ -44,7 +54,7 @@ public class ExternalToInternalTokenExchangeProvider extends StandardTokenExchan
 
     @Override
     public boolean supports(TokenExchangeContext context) {
-        return (isExternalInternalTokenExchangeRequest(context));
+        return isExternalInternalTokenExchangeRequest(context);
     }
 
     @Override
@@ -84,17 +94,18 @@ public class ExternalToInternalTokenExchangeProvider extends StandardTokenExchan
     }
 
     protected Response exchangeExternalToken(String subjectIssuer, String subjectToken) {
+
         // try to find the IDP whose alias matches the issuer or the subject issuer in the form params.
         ExternalExchangeContext externalExchangeContext = this.locateExchangeExternalTokenByAlias(subjectIssuer);
 
         if (externalExchangeContext == null) {
             event.error(Errors.INVALID_ISSUER);
-            throw new CorsErrorResponseException(cors, Errors.INVALID_ISSUER, "Invalid " + OAuth2Constants.SUBJECT_ISSUER + " parameter", Response.Status.BAD_REQUEST);
+            throw new CorsErrorResponseException(cors, Errors.INVALID_ISSUER, "Invalid " + OAuth2Constants.SUBJECT_TOKEN_TYPE + " parameter", Response.Status.BAD_REQUEST);
         }
         BrokeredIdentityContext context = externalExchangeContext.provider().exchangeExternal(this, this.context);
         if (context == null) {
             event.error(Errors.INVALID_ISSUER);
-            throw new CorsErrorResponseException(cors, Errors.INVALID_ISSUER, "Invalid " + OAuth2Constants.SUBJECT_ISSUER + " parameter", Response.Status.BAD_REQUEST);
+            throw new CorsErrorResponseException(cors, Errors.INVALID_ISSUER, "Invalid " + OAuth2Constants.SUBJECT_TOKEN_TYPE + " parameter", Response.Status.BAD_REQUEST);
         }
 
         UserModel user = importUserFromExternalIdentity(context);
@@ -109,6 +120,32 @@ public class ExternalToInternalTokenExchangeProvider extends StandardTokenExchan
         context.addSessionNotesToUserSession(userSession);
 
         return exchangeClientToClient(user, userSession, null, false);
+    }
+
+    protected String getSubjectIssuer(TokenExchangeContext context, String subjectToken, String subjectTokenType) {
+        String subjectIssuer = context.getFormParams().getFirst(OAuth2Constants.SUBJECT_TOKEN_TYPE);
+        if (subjectIssuer != null && subjectIssuer.startsWith(Constants.TOKEN_EXCHANGE_EXTERNAL_IDP_URN_PREFIX) && subjectIssuer.length() > Constants.TOKEN_EXCHANGE_EXTERNAL_IDP_URN_PREFIX.length()) {
+            return subjectIssuer.substring(Constants.TOKEN_EXCHANGE_EXTERNAL_IDP_URN_PREFIX.length() );
+        }
+        if (OAuth2Constants.JWT_TOKEN_TYPE.equals(subjectTokenType)) {
+            try {
+                JWSInput jws = new JWSInput(subjectToken);
+                JsonWebToken jwt = jws.readJsonContent(JsonWebToken.class);
+                return jwt.getIssuer();
+            } catch (JWSInputException e) {
+                context.getEvent().detail(Details.REASON, "unable to parse jwt subject_token");
+                context.getEvent().error(Errors.INVALID_TOKEN);
+                throw new CorsErrorResponseException(context.getCors(), OAuthErrorException.INVALID_REQUEST, "Invalid token type, must be access token", Response.Status.BAD_REQUEST);
+            }
+        }
+
+        try {
+            UriUtils.checkUrl(SslRequired.EXTERNAL, subjectIssuer, subjectIssuer);
+            return subjectIssuer;
+        }
+        catch (Exception e) {
+            return null;
+        }
     }
 
 }

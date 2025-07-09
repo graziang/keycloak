@@ -214,6 +214,7 @@ public final class Constants {
     public static final String GRANT_TYPE = OAuth2Constants.GRANT_TYPE;
     // Note in client session to know the subject client
     public static final String TOKEN_EXCHANGE_SUBJECT_CLIENT = "token_exchange_subject_client";
+    public static final String TOKEN_EXCHANGE_EXTERNAL_IDP_URN_PREFIX = "urn:idp:";
 
     // Note in transient userSession specifying that it was created from "persistent" user session for the temporary purpose. The values of this note could be "online" and "offline"
     public static final String CREATED_FROM_PERSISTENT = "created_from_persistent";
