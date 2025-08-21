@@ -11,6 +11,7 @@ import org.keycloak.common.util.ObjectUtil;
 import org.keycloak.events.admin.OperationType;
 import org.keycloak.events.admin.ResourceType;
 import org.keycloak.models.credential.OTPCredentialModel;
+import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.testframework.annotations.InjectUser;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -144,6 +146,7 @@ public class UserCredentialTest extends AbstractUserTest {
                 .findFirst().orElseThrow().getUserLabel());
     }
 
+
     @Test
     public void testShouldFailToSetCredentialUserLabelWhenLabelIsEmpty() {
         UserResource user = userOtp1.admin();
@@ -161,7 +164,7 @@ public class UserCredentialTest extends AbstractUserTest {
     }
 
     @Test
-    public void testShouldFailToSetCredentialUserLabelWhenLabelAlreadyExists() {
+    public void testShouldFailToSetCredentialUserLabelWhenLabelAlreadyExistsForSameType() {
         UserResource user = userOtp2.admin();
 
         List<CredentialRepresentation> credentials = user.credentials().stream()
@@ -186,6 +189,34 @@ public class UserCredentialTest extends AbstractUserTest {
         String body = response.readEntity(String.class);
         Assertions.assertNotNull(body);
         Assertions.assertTrue(body.contains("Device already exists with the same name"));
+    }
+
+    @Test
+    public void testShouldFailToSetCredentialUserLabelWhenLabelAlreadyExistsInDifferentCredential() {
+        UserResource user = userOtp2.admin();
+
+        CredentialRepresentation credentialPassword = user.credentials().stream()
+                .filter(c -> c.getType().equals(PasswordCredentialModel.TYPE))
+                .findFirst().get();
+        CredentialRepresentation credentialOtp = user.credentials().stream()
+                .filter(c -> c.getType().equals(OTPCredentialModel.TYPE))
+                .findFirst().get();
+
+        String newUserLabel = "Same User Label";
+
+        user.setCredentialUserLabel(credentialPassword.getId(), newUserLabel);
+        user.setCredentialUserLabel(credentialOtp.getId(), newUserLabel);
+
+        credentialPassword = user.credentials().stream()
+                .filter(c -> c.getType().equals(PasswordCredentialModel.TYPE))
+                .findFirst().get();
+        credentialOtp = user.credentials().stream()
+                .filter(c -> c.getType().equals(OTPCredentialModel.TYPE))
+                .findFirst().get();
+
+        assertEquals(credentialPassword.getUserLabel(), newUserLabel);
+        assertEquals(credentialOtp.getUserLabel(), newUserLabel);
+        assertEquals(credentialPassword.getUserLabel(), credentialOtp.getUserLabel());
     }
 
     @Test

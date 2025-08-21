@@ -63,7 +63,7 @@ public class JpaUserCredentialStore implements UserCredentialStore {
     public void updateCredential(RealmModel realm, UserModel user, CredentialModel cred) {
         CredentialEntity entity = em.find(CredentialEntity.class, cred.getId());
         if (!checkCredentialEntity(entity, user)) return;
-        validateDuplicateCredential(realm, user, cred.getUserLabel(), cred.getId());
+        validateDuplicateCredential(realm, user, cred.getUserLabel(), cred.getId(), cred.getType());
         entity.setCreatedDate(cred.getCreatedDate());
         entity.setUserLabel(cred.getUserLabel());
         entity.setType(cred.getType());
@@ -140,9 +140,9 @@ public class JpaUserCredentialStore implements UserCredentialStore {
 
     }
 
-    private void validateDuplicateCredential(RealmModel realm, UserModel user, String userLabel, String credentialId) {
+    private void validateDuplicateCredential(RealmModel realm, UserModel user, String userLabel, String credentialId, String type) {
         if (userLabel != null) {
-            boolean exists = getStoredCredentialEntities(realm, user)
+            boolean exists = getStoredCredentialsByTypeStream(realm, user, type)
                     .anyMatch(existing -> existing.getUserLabel() != null
                             && existing.getUserLabel().equalsIgnoreCase(userLabel.trim())
                             && (credentialId == null || !existing.getId().equals(credentialId))); // Exclude self in update
@@ -154,7 +154,7 @@ public class JpaUserCredentialStore implements UserCredentialStore {
     }
 
     CredentialEntity createCredentialEntity(RealmModel realm, UserModel user, CredentialModel cred) {
-        validateDuplicateCredential(realm, user, cred.getUserLabel(), null);
+        validateDuplicateCredential(realm, user, cred.getUserLabel(), null, cred.getType());
         CredentialEntity entity = new CredentialEntity();
         String id = cred.getId() == null ? KeycloakModelUtils.generateId() : cred.getId();
         entity.setId(id);

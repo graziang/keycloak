@@ -564,7 +564,7 @@ public class JpaUserFederatedStorageProvider implements
     public void updateCredential(RealmModel realm, String userId, CredentialModel cred) {
         FederatedUserCredentialEntity entity = em.find(FederatedUserCredentialEntity.class, cred.getId());
         if (!checkCredentialEntity(entity, userId)) return;
-        validateDuplicateUserCredential(userId, cred.getUserLabel(), cred.getId());
+        validateDuplicateUserCredential(userId, cred.getUserLabel(), cred.getId(), cred.getType());
         createIndex(realm, userId);
         entity.setCreatedDate(cred.getCreatedDate());
         entity.setType(cred.getType());
@@ -574,12 +574,12 @@ public class JpaUserFederatedStorageProvider implements
     }
 
     /**
-     * Validates if a credential with the same user label already exists for the given user.
+     * Validates if a credential with the same user label and the same type already exists for the given user.
      * Excludes the credential itself if updating an existing one.
      */
-    private void validateDuplicateUserCredential(String userId, String userLabel, String credentialId) {
+    private void validateDuplicateUserCredential(String userId, String userLabel, String credentialId, String type) {
         if (userLabel != null) {
-            boolean exists = getStoredCredentialEntitiesStream(userId)
+            boolean exists = getStoredCredentialsByTypeStream(null, userId, type)
                     .anyMatch(existing -> existing.getUserLabel() != null
                             && existing.getUserLabel().trim().equalsIgnoreCase(userLabel.trim())
                             && (credentialId == null || !existing.getId().equals(credentialId)));
@@ -592,7 +592,7 @@ public class JpaUserFederatedStorageProvider implements
 
     @Override
     public CredentialModel createCredential(RealmModel realm, String userId, CredentialModel cred) {
-        validateDuplicateUserCredential(userId, cred.getUserLabel(), null);
+        validateDuplicateUserCredential(userId, cred.getUserLabel(), null, cred.getType());
         createIndex(realm, userId);
         FederatedUserCredentialEntity entity = new FederatedUserCredentialEntity();
         String id = cred.getId() == null ? KeycloakModelUtils.generateId() : cred.getId();
