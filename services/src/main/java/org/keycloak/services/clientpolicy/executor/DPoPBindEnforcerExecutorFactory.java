@@ -17,6 +17,7 @@
 
 package org.keycloak.services.clientpolicy.executor;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -34,8 +35,15 @@ public class DPoPBindEnforcerExecutorFactory  implements ClientPolicyExecutorPro
 
     public static final String AUTO_CONFIGURE = "auto-configure";
 
+    public static final String ALLOW_ONLY_REFRESH_BINDING = "allow-only-refresh-token-binding";
+
     private static final ProviderConfigProperty AUTO_CONFIGURE_PROPERTY = new ProviderConfigProperty(
             AUTO_CONFIGURE, "Auto-configure", "If On, then the during client creation or update, the configuration of the client will be auto-configured to use DPoP bind token", ProviderConfigProperty.BOOLEAN_TYPE, false);
+
+    private static final ProviderConfigProperty ALLOW_ONLY_REFRESH_BINDING_PROPERTY = new ProviderConfigProperty(
+            ALLOW_ONLY_REFRESH_BINDING, "Allow Only refresh token binding", "If On and the client is public the DPoP binding is enforced only for refresh token, this option is ignored if the DPoP is enforced in client settings",
+            ProviderConfigProperty.BOOLEAN_TYPE, false);
+
 
     @Override
     public ClientPolicyExecutorProvider create(KeycloakSession session) {
@@ -61,11 +69,11 @@ public class DPoPBindEnforcerExecutorFactory  implements ClientPolicyExecutorPro
 
     @Override
     public String getHelpText() {
-        return "It enforces a client to enable DPoP bind token setting.";
+        return "It enforces a client to enable DPoP bind token setting and  can be also used to enable DPoP binding only for refresh token when the client is public.";
     }
 
     @Override
     public List<ProviderConfigProperty> getConfigProperties() {
-        return Collections.singletonList(AUTO_CONFIGURE_PROPERTY);
+        return Arrays.asList(AUTO_CONFIGURE_PROPERTY, ALLOW_ONLY_REFRESH_BINDING_PROPERTY);
     }
 }

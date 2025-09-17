@@ -267,9 +267,10 @@ public final class ClientPoliciesUtil {
         return config;
     }
 
-    public static DPoPBindEnforcerExecutor.Configuration createDPoPBindEnforcerExecutorConfig(Boolean autoConfigure) {
+    public static DPoPBindEnforcerExecutor.Configuration createDPoPBindEnforcerExecutorConfig(Boolean autoConfigure, Boolean bindRefreshToken) {
         DPoPBindEnforcerExecutor.Configuration config = new DPoPBindEnforcerExecutor.Configuration();
         config.setAutoConfigure(autoConfigure);
+        config.setAllowOnlyRefreshTokenBinding(bindRefreshToken);
         return config;
     }
 
