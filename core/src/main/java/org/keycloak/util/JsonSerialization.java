@@ -45,6 +45,7 @@ public class JsonSerialization {
         mapper.registerModule(new Jdk8Module());
         mapper.registerModule(new JavaTimeModule());
         mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        mapper.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
         mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         prettyMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         prettyMapper.enable(SerializationFeature.INDENT_OUTPUT);
