@@ -195,7 +195,7 @@ In a scenario where a mobile application already supports login with Google with
 
 In this case, the Google ID token cannot be used with the JWT Authorization Grant because the `aud` claim in the ID Token does not match the client id configured in the Google Identity Provider.
 
-To address this issue, you can use Client Policies with the `jwt-authorization-grant-audience` executor to explicitly set the Google ID Token audience as the trusted audience, replacing the default audience validation configured for the Identity Provider.
+To address this issue, you can use link:{adminguide_link}#_client_policies[Client Policies] with the `jwt-authorization-grant-audience` executor to explicitly set the Google ID Token audience as the trusted audience, replacing the default audience validation configured for the Identity Provider.
 
 **Example setup:**
 
