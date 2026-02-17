@@ -146,6 +146,7 @@ public class UpdatePassword implements RequiredActionProvider, RequiredActionFac
 
         try {
             user.credentialManager().updateCredential(UserCredentialModel.password(passwordNew, false));
+            authSession.setAuthNote(Constants.PASSWORD_UPDATED, String.valueOf(Time.currentTimeMillis()));
             context.success();
             deprecatedEvent.success();
         } catch (ModelException me) {

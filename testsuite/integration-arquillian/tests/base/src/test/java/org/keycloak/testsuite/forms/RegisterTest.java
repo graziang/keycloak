@@ -203,6 +203,8 @@ public class RegisterTest extends AbstractTestRealmKeycloakTest {
         oauth.logoutForm().idTokenHint(idTokenHint).open();
         events.clear();
 
+        setTimeOffset(60);
+
         try (RealmAttributeUpdater rau = configureRealmRegistrationEmailAsUsername(true).update()) {
             loginPage.open();
             loginPage.assertCurrent();
@@ -218,6 +220,7 @@ public class RegisterTest extends AbstractTestRealmKeycloakTest {
         } finally {
             assertThat(userId, notNullValue());
             testRealm().users().get(userId).remove();
+            setTimeOffset(0);
         }
     }
 
@@ -458,6 +461,7 @@ public class RegisterTest extends AbstractTestRealmKeycloakTest {
         String email = username + "@email.com";
         registerPage.register("firstName", "lastName", email, username, generatePassword());
 
+      //  setTimeOffset(5);
         appPage.assertCurrent();
         assertEquals(RequestType.AUTH_RESPONSE, appPage.getRequestType());
 

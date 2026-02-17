@@ -3,9 +3,12 @@ package org.keycloak.tests.admin.user;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
+import jakarta.mail.internet.MimeMessage;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
@@ -15,25 +18,40 @@ import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.common.util.ObjectUtil;
 import org.keycloak.events.admin.OperationType;
 import org.keycloak.events.admin.ResourceType;
+import org.keycloak.models.UserModel;
 import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.representations.idm.CredentialRepresentation;
+import org.keycloak.representations.idm.RequiredActionProviderRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.testframework.annotations.InjectUser;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.events.AdminEventAssertion;
+import org.keycloak.testframework.mail.MailServer;
+import org.keycloak.testframework.mail.annotations.InjectMailServer;
 import org.keycloak.testframework.oauth.OAuthClient;
 import org.keycloak.testframework.oauth.annotations.InjectOAuthClient;
 import org.keycloak.testframework.realm.ManagedUser;
 import org.keycloak.testframework.realm.UserConfig;
 import org.keycloak.testframework.realm.UserConfigBuilder;
+import org.keycloak.testframework.remote.timeoffset.InjectTimeOffSet;
+import org.keycloak.testframework.remote.timeoffset.TimeOffSet;
+import org.keycloak.testframework.ui.annotations.InjectPage;
+import org.keycloak.testframework.ui.page.InfoPage;
+import org.keycloak.testframework.ui.page.LoginPasswordUpdatePage;
+import org.keycloak.testframework.ui.page.ProceedPage;
+import org.keycloak.testframework.ui.page.TermsAndConditionsPage;
+import org.keycloak.tests.utils.MailUtils;
 import org.keycloak.tests.utils.admin.AdminApiUtil;
 import org.keycloak.tests.utils.admin.AdminEventPaths;
 import org.keycloak.testsuite.util.AccountHelper;
 import org.keycloak.util.JsonSerialization;
 
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.openqa.selenium.Cookie;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -55,6 +73,24 @@ public class UserCredentialTest extends AbstractUserTest {
 
     @InjectUser(ref = "test-user@localhost", config = UserCredentialTestUserConf.class)
     ManagedUser testUser;
+
+    @InjectPage
+    LoginPasswordUpdatePage updatePasswordPage;
+
+    @InjectPage
+    protected TermsAndConditionsPage termsAndConditionsPage;
+
+    @InjectPage
+    ProceedPage proceedPage;
+
+    @InjectPage
+    InfoPage infoPage;
+
+    @InjectTimeOffSet
+    TimeOffSet timeOffSet;
+
+    @InjectMailServer
+    MailServer mailServer;
 
     @Test
     public void resetUserPassword() {
@@ -292,6 +328,80 @@ public class UserCredentialTest extends AbstractUserTest {
                 JsonSerialization.writeValueAsString(user),
                 actualRepresentation
         );
+    }
+
+    @Test
+    public void testResetPasswordDifferentAuthSession() throws IOException {
+
+        //enable TERMS_AND_CONDITIONS
+        RequiredActionProviderRepresentation action = new RequiredActionProviderRepresentation();
+        action.setAlias(UserModel.RequiredAction.TERMS_AND_CONDITIONS.toString());
+        action.setEnabled(true);
+        action.setDefaultAction(false);
+        action.setConfig(null);
+        managedRealm.admin().flows().updateRequiredAction(action.getAlias(), action);
+
+        //put TERMS_AND_CONDITIONS after UPDATE_PASSWORD
+        managedRealm.admin().flows().lowerRequiredActionPriority(UserModel.RequiredAction.TERMS_AND_CONDITIONS.toString());
+        managedRealm.admin().flows().lowerRequiredActionPriority(UserModel.RequiredAction.TERMS_AND_CONDITIONS.toString());
+
+        //add TERMS_AND_CONDITIONS to the user
+        UserRepresentation userRep = managedRealm.admin().users().get(testUser.getId()).toRepresentation();
+        userRep.setRequiredActions(List.of(UserModel.RequiredAction.TERMS_AND_CONDITIONS.toString()));
+        managedRealm.admin().users().get(userRep.getId()).update(userRep);
+
+        //login and wait on terms and condition page
+        oauth.openLoginForm();
+        loginPage.assertCurrent();
+        loginPage.fillLogin("test-user@localhost", "password");
+        loginPage.submit();
+        termsAndConditionsPage.assertCurrent();
+
+        //save all cookies and the terms page url
+        String oldUrl = driver.getCurrentUrl();
+        Set<Cookie> allOldCookies = driver.cookies().getAll();
+        Cookie authSessionCookie = driver.cookies().get("AUTH_SESSION_ID");
+
+        //move 2 sec forward
+        timeOffSet.set(2);
+        driver.cookies().deleteAll();
+
+        //send reset password email
+        UserResource user = managedRealm.admin().users().get(testUser.getId());
+        List<String> actions = new LinkedList<>();
+        actions.add(UserModel.RequiredAction.UPDATE_PASSWORD.name());
+        user.executeActionsEmail(actions);
+        Assertions.assertEquals(1, mailServer.getReceivedMessages().length);
+        MimeMessage message = mailServer.getReceivedMessages()[0];
+        MailUtils.EmailBody body = MailUtils.getBody(message);
+        String link = MailUtils.getPasswordResetEmailLink(body);
+
+        //reset the password and complete terms required action
+        driver.open(link);
+        proceedPage.assertCurrent();
+        assertThat(proceedPage.getInfo(), Matchers.containsString("Update Password"));
+        proceedPage.clickProceedLink();
+        updatePasswordPage.assertCurrent();
+        updatePasswordPage.changePassword("password", "password");
+        termsAndConditionsPage.assertCurrent();
+        termsAndConditionsPage.acceptTerms();
+        assertEquals("Your account has been updated.", infoPage.getInfo());
+
+        //restore old cookies and open old url, the user is redirected to info page, and not automatically logged it
+        driver.cookies().deleteAll();
+        allOldCookies.forEach(c-> driver.cookies().add(c));
+        driver.open(oldUrl);
+        assertEquals("Your account has been updated.", infoPage.getInfo());
+
+        //opening the login form the user is prompted to enter the credentials, no identity cookie is present
+        oauth.openLoginForm();
+        Assertions.assertNotEquals(authSessionCookie.getValue(), driver.cookies().get("AUTH_SESSION_ID").getValue());
+        loginPage.assertCurrent();
+        loginPage.fillLogin("test-user@localhost", "password");
+        loginPage.submit();
+        assertTrue(driver.page().getPageSource().contains("Happy days"), "Test user should be successfully logged in.");
+        AccountHelper.logout(managedRealm.admin(), "test-user@localhost");
+        timeOffSet.set(0);
     }
 
     private void assertSameIds(List<String> expectedIds, List<CredentialRepresentation> actual) {

@@ -27,10 +27,12 @@ import org.keycloak.authentication.FormAction;
 import org.keycloak.authentication.FormActionFactory;
 import org.keycloak.authentication.FormContext;
 import org.keycloak.authentication.ValidationContext;
+import org.keycloak.common.util.Time;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
@@ -94,6 +96,7 @@ public class RegistrationPassword implements FormAction, FormActionFactory {
         String password = formData.getFirst(RegistrationPage.FIELD_PASSWORD);
         UserModel user = context.getUser();
         try {
+            context.getAuthenticationSession().setAuthNote(Constants.PASSWORD_UPDATED, String.valueOf(Time.currentTimeMillis()));
             user.credentialManager().updateCredential(UserCredentialModel.password(formData.getFirst("password"), false));
         } catch (Exception me) {
             user.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);

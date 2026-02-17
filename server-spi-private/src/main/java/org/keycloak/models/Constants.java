@@ -231,4 +231,7 @@ public final class Constants {
     // This attribute can be used in a realm import definition to signal that default client scopes should be created in addition to the client scopes defined by the realm import definition.
     // When this attribute is omitted or set to false, the default client scopes are not created if at least one other client scope is defined by the realm import definition.
     public static final String CREATE_DEFAULT_CLIENT_SCOPES = "CreateDefaultClientScopes";
+
+    //note to store create/update time of a password in the current auth session
+    public static final String PASSWORD_UPDATED = "password-updated";
 }

@@ -33,6 +33,7 @@ import org.keycloak.models.Constants;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.credential.PasswordCredentialModel;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.EventRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RequiredActionProviderRepresentation;
@@ -191,6 +192,8 @@ public class AppInitiatedActionResetPasswordTest extends AbstractAppInitiatedAct
 
     @Test
     public void resetPasswordRequiresReAuth() {
+        resetUserPassword("test-user@localhost", "password");
+
         loginPage.open();
         loginPage.login("test-user@localhost", "password");
 
@@ -379,6 +382,13 @@ public class AppInitiatedActionResetPasswordTest extends AbstractAppInitiatedAct
 
     @Test
     public void resetPasswordUserHasUpdatePasswordRequiredAction() {
+        //set password with correct creation time
+        CredentialRepresentation credPerm = new CredentialRepresentation();
+        credPerm.setType(CredentialRepresentation.PASSWORD);
+        credPerm.setValue("password");
+        credPerm.setTemporary(null);
+        realmsResouce().realm(TEST_REALM_NAME).users().get(findUser("test-user@localhost").getId()).resetPassword(credPerm);
+
         loginPage.open();
         loginPage.login("test-user@localhost", "password");
 
@@ -408,6 +418,8 @@ public class AppInitiatedActionResetPasswordTest extends AbstractAppInitiatedAct
 
     @Test
     public void checkLogoutSessions() {
+        resetUserPassword("test-user@localhost", "password");
+
         OAuthClient oauth2 = oauth.newConfig().driver(driver2);
 
         loginPage.open();
@@ -462,6 +474,16 @@ public class AppInitiatedActionResetPasswordTest extends AbstractAppInitiatedAct
         assertKcActionStatus(SUCCESS);
 
         assertEquals(2, testUser.getUserSessions().size());
+    }
+
+    private void resetUserPassword(String username, String password) {
+        setTimeOffset(0);
+        CredentialRepresentation credPerm = new CredentialRepresentation();
+        credPerm.setType(CredentialRepresentation.PASSWORD);
+        credPerm.setValue(password);
+        credPerm.setTemporary(null);
+        realmsResouce().realm(TEST_REALM_NAME).users().get(findUser(username).getId()).resetPassword(credPerm);
+
     }
 
 }

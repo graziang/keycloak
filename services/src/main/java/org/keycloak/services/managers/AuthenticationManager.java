@@ -88,6 +88,7 @@ import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserConsentModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
+import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.utils.DefaultRequiredActions;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.SessionExpirationUtils;
@@ -1084,6 +1085,17 @@ public class AuthenticationManager {
                     return handleActionTokenVerificationException(session, event, Errors.EXPIRED_CODE, Messages.EXPIRED_ACTION);
                 }
             }
+        }
+        //skip if the password was updated/created in the current auth session
+        String pwdUpdatedNote = authSession.getAuthNote(Constants.PASSWORD_UPDATED);
+        boolean passwordUpdated = authSession.getAuthenticatedUser().credentialManager().getCredentials()
+                .anyMatch(c -> PasswordCredentialModel.TYPE.equals(c.getType())
+                        && c.getCreatedDate() != null
+                        && c.getCreatedDate()/1000 > authSession.getParentSession().getTimestamp()
+                        && (pwdUpdatedNote == null));
+
+        if (passwordUpdated) {
+            authSession.setAuthNote(END_AFTER_REQUIRED_ACTIONS, "true");
         }
 
         if (authSession.getAuthNote(END_AFTER_REQUIRED_ACTIONS) != null) {

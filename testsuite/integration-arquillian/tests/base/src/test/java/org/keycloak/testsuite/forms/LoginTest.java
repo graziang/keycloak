@@ -48,6 +48,7 @@ import org.keycloak.models.utils.SessionTimeoutHelper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.EventRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -852,6 +853,13 @@ public class LoginTest extends AbstractChangeImportedUserPasswordsTest {
 
     @Test
     public void loginAfterExpiredTimeout() throws Exception {
+        //set password with correct creation time
+        CredentialRepresentation credPerm = new CredentialRepresentation();
+        credPerm.setType(CredentialRepresentation.PASSWORD);
+        credPerm.setValue(generatePassword("login-test"));
+        credPerm.setTemporary(null);
+        realmsResouce().realm(TEST_REALM_NAME).users().get(userId).resetPassword(credPerm);
+
         try (AutoCloseable c = new RealmAttributeUpdater(adminClient.realm("test"))
                 .updateWith(r -> {
                     r.setSsoSessionMaxLifespan(5);

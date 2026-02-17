@@ -126,10 +126,14 @@ public class AbstractUserTest {
     }
 
     protected String createUser(String username, String email) {
+        return createUser(username, email, Collections.emptyList());
+    }
+
+    protected String createUser(String username, String email, List<String> requiredActions) {
         UserRepresentation user = new UserRepresentation();
         user.setUsername(username);
         user.setEmail(email);
-        user.setRequiredActions(Collections.emptyList());
+        user.setRequiredActions(requiredActions);
         user.setEnabled(true);
 
         return createUser(user);
