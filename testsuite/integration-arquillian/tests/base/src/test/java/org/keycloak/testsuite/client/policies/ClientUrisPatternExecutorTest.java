@@ -73,9 +73,9 @@ public class ClientUrisPatternExecutorTest extends AbstractClientPoliciesTest {
         testFieldByAdmin("backchannelLogoutUrl", (c, val) -> c.getAttributes().put(OIDCConfigAttributes.BACKCHANNEL_LOGOUT_URL, val));
         testFieldByAdmin("postLogoutRedirectUris", (c, val) -> c.getAttributes().put(OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS, val));
         testFieldByAdmin("cibaClientNotificationEndpoint", (c, val) -> c.getAttributes().put(CibaConfig.CIBA_BACKCHANNEL_CLIENT_NOTIFICATION_ENDPOINT, val));
-        testFieldByAdmin("logoUri", (c, val) -> c.getAttributes().put(OIDCConfigAttributes.LOGO_URI, val));
-        testFieldByAdmin("policyUri", (c, val) -> c.getAttributes().put(OIDCConfigAttributes.POLICY_URI, val));
-        testFieldByAdmin("tosUri", (c, val) -> c.getAttributes().put(OIDCConfigAttributes.TOS_URI, val));
+        testFieldByAdmin(OIDCConfigAttributes.LOGO_URI, (c, val) -> c.getAttributes().put(OIDCConfigAttributes.LOGO_URI, val));
+        testFieldByAdmin(OIDCConfigAttributes.POLICY_URI, (c, val) -> c.getAttributes().put(OIDCConfigAttributes.POLICY_URI, val));
+        testFieldByAdmin(OIDCConfigAttributes.TOS_URI, (c, val) -> c.getAttributes().put(OIDCConfigAttributes.TOS_URI, val));
     }
 
     @Test

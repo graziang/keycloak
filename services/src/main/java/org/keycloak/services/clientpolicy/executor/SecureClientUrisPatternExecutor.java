@@ -210,13 +210,13 @@ public class SecureClientUrisPatternExecutor implements ClientPolicyExecutorProv
                 return getAttributeMultivalued(attributes, OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS);
             case "cibaClientNotificationEndpoint":
                 return singletonOrEmpty(attributes.get(CibaConfig.CIBA_BACKCHANNEL_CLIENT_NOTIFICATION_ENDPOINT));
-            case "logoUri":
+            case OIDCConfigAttributes.LOGO_URI:
                 return singletonOrEmpty(attributes.get(OIDCConfigAttributes.LOGO_URI));
-            case "policyUri":
+            case OIDCConfigAttributes.POLICY_URI:
                 return singletonOrEmpty(attributes.get(OIDCConfigAttributes.POLICY_URI));
-            case "tosUri":
+            case OIDCConfigAttributes.TOS_URI:
                 return singletonOrEmpty(attributes.get(OIDCConfigAttributes.TOS_URI));
-            case "sectorIdentifierUri":
+            case OIDCConfigAttributes.SECTOR_IDENTIFIER_URI:
                 return singletonOrEmpty(attributes.get(OIDCConfigAttributes.SECTOR_IDENTIFIER_URI));
             default:
                 logger.debugv("Field extraction not implemented for: {0}", fieldName);

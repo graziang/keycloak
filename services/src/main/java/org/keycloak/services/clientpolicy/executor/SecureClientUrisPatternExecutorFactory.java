@@ -23,6 +23,7 @@ import java.util.List;
 import org.keycloak.Config.Scope;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.provider.ProviderConfigProperty;
 
 public class SecureClientUrisPatternExecutorFactory implements ClientPolicyExecutorProviderFactory {
@@ -45,10 +46,10 @@ public class SecureClientUrisPatternExecutorFactory implements ClientPolicyExecu
             "backchannelLogoutUrl",
             "postLogoutRedirectUris",
             "cibaClientNotificationEndpoint",
-            "logoUri",
-            "policyUri",
-            "tosUri",
-            "sectorIdentifierUri"
+            OIDCConfigAttributes.LOGO_URI,
+            OIDCConfigAttributes.POLICY_URI,
+            OIDCConfigAttributes.TOS_URI,
+            OIDCConfigAttributes.SECTOR_IDENTIFIER_URI
     );
 
     private static final ProviderConfigProperty CLIENT_URI_FIELDS_PROPERTY = new ProviderConfigProperty(
