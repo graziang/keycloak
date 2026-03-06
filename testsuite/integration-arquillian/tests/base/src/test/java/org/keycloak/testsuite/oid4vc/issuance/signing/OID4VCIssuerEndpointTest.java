@@ -233,7 +233,7 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
                 TEST_DID.toString(),
                 jwtTypeCredentialConfigurationIdName,
                 jwtTypeCredentialScopeName,
-                null,
+                minimalJwtTypeCredentialScopeName,
                 VCFormat.JWT_VC,
                 TEST_CREDENTIAL_MAPPERS_FILE,
                 Collections.emptyList())
