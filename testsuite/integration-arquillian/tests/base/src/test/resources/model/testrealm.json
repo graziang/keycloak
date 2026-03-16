@@ -463,7 +463,7 @@
                         "logic": "POSITIVE",
                         "decisionStrategy": "UNANIMOUS",
                         "config": {
-                            "clients": "[\"broker\",\"admin-cli\"]"
+                            "clients": "[\"admin-cli\"]"
                         }
                     },
                     {

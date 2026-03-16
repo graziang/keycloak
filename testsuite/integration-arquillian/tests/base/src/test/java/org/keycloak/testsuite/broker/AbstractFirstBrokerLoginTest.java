@@ -55,7 +55,6 @@ import static org.keycloak.testsuite.admin.ApiUtil.removeUserByUsername;
 import static org.keycloak.testsuite.broker.BrokerRunOnServerUtil.assertHardCodedSessionNote;
 import static org.keycloak.testsuite.broker.BrokerRunOnServerUtil.configureAutoLinkFlow;
 import static org.keycloak.testsuite.broker.BrokerRunOnServerUtil.configureConfirmOverrideLinkFlow;
-import static org.keycloak.testsuite.broker.BrokerRunOnServerUtil.grantReadTokenRole;
 import static org.keycloak.testsuite.broker.BrokerTestConstants.USER_EMAIL;
 import static org.keycloak.testsuite.broker.BrokerTestTools.getConsumerRoot;
 import static org.keycloak.testsuite.broker.BrokerTestTools.waitForPage;
@@ -1614,15 +1613,8 @@ public abstract class AbstractFirstBrokerLoginTest extends AbstractInitializedBa
             component.getConfig().putSingle(IMPORT_ENABLED, Boolean.toString(false));
             adminClient.realm(bc.consumerRealmName()).components().add(component);
 
-            // grant read-token role first
             String username = bc.getUserLogin();
             String createdId = createUser(username);
-            testingClient.server(bc.consumerRealmName()).run(grantReadTokenRole(username));
-
-            // enable read token role on create
-            IdentityProviderRepresentation idpRep = identityProviderResource.toRepresentation();
-            idpRep.setAddReadTokenRoleOnCreate(true);
-            identityProviderResource.update(idpRep);
 
             // auto link when first broker login flow
             testingClient.server(bc.consumerRealmName()).run(configureAutoLinkFlow(bc.getIDPAlias()));

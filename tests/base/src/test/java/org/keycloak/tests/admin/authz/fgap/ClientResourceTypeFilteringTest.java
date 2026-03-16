@@ -73,7 +73,7 @@ public class ClientResourceTypeFilteringTest extends AbstractPermissionTest {
 
         search = realmAdminClient.realm(realm.getName()).clients().findAll();
         assertFalse(search.isEmpty());
-        assertEquals(59, search.size());
+        assertEquals(58, search.size());
     }
 
     @Test

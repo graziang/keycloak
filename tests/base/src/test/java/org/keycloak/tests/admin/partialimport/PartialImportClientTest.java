@@ -145,7 +145,7 @@ public class PartialImportClientTest extends AbstractPartialImportTest {
     public void testOverwriteExistingClientWithRoles() {
         setOverwrite();
 
-        ClientRepresentation client = masterRealm.admin().clients().findByClientId("broker").get(0);
+        ClientRepresentation client = masterRealm.admin().clients().findByClientId("account").get(0);
         List<RoleRepresentation> clientRoles = masterRealm.admin().clients().get(client.getId()).roles().list();
 
         Map<String, List<RoleRepresentation>> clients = new HashMap<>();

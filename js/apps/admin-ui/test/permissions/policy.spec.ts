@@ -33,7 +33,7 @@ test.describe.serial("Policy section tests", () => {
     await fillPolicyForm(page, {
       name: "test-policy",
       description: "test-description",
-      client: "broker",
+      client: "account",
     });
     await clickSaveButton(page);
   });

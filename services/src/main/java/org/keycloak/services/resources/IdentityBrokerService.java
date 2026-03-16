@@ -755,12 +755,12 @@ public class IdentityBrokerService implements UserAuthenticationIdentityProvider
             event.detail(Details.USERNAME, federatedUser.getUsername());
 
             if (Booleans.isTrue(context.getIdpConfig().isAddReadTokenRoleOnCreate())) {
+                logger.warn("Client 'broker' is deprecated");
                 ClientModel brokerClient = realmModel.getClientByClientId(Constants.BROKER_SERVICE_CLIENT_ID);
-                if (brokerClient == null) {
-                    throw new IdentityBrokerException("Client 'broker' not available. Maybe realm has not migrated to support the broker token exchange service");
+                if (brokerClient != null) {
+                    RoleModel readTokenRole = brokerClient.getRole(Constants.READ_TOKEN_ROLE);
+                    federatedUser.grantRole(readTokenRole);
                 }
-                RoleModel readTokenRole = brokerClient.getRole(Constants.READ_TOKEN_ROLE);
-                federatedUser.grantRole(readTokenRole);
             }
 
             // Add federated identity link here

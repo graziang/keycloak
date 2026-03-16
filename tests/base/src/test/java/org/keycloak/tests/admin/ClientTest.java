@@ -128,7 +128,7 @@ public class ClientTest {
 
     @Test
     public void getClients() {
-        Assert.assertNames(managedRealm.admin().clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "broker", "test-app", Constants.ADMIN_CLI_CLIENT_ID);
+        Assert.assertNames(managedRealm.admin().clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "test-app", Constants.ADMIN_CLI_CLIENT_ID);
     }
 
     @Test
@@ -190,7 +190,7 @@ public class ClientTest {
         ClientResource client = managedRealm.admin().clients().get(id);
         assertNotNull(client);
         assertNotNull(client.toRepresentation().getSecret());
-        Assert.assertNames(managedRealm.admin().clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "broker", "my-app", "test-app", Constants.ADMIN_CLI_CLIENT_ID);
+        Assert.assertNames(managedRealm.admin().clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "my-app", "test-app", Constants.ADMIN_CLI_CLIENT_ID);
     }
 
     @Test
@@ -199,7 +199,7 @@ public class ClientTest {
         ClientResource client = managedRealm.admin().clients().get(id);
         assertNotNull(client);
         assertNull(client.toRepresentation().getSecret());
-        Assert.assertNames(managedRealm.admin().clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "broker", "my-app", "test-app", Constants.ADMIN_CLI_CLIENT_ID);
+        Assert.assertNames(managedRealm.admin().clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "my-app", "test-app", Constants.ADMIN_CLI_CLIENT_ID);
     }
 
     @Test

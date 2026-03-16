@@ -64,7 +64,7 @@ public class RealmCreateTest extends AbstractRealmTest {
         Assert.assertNames(adminClient.realms().findAll(), "master", managedRealm.getName(), "new-realm");
 
         List<String> clients = adminClient.realms().realm("new-realm").clients().findAll().stream().map(ClientRepresentation::getClientId).collect(Collectors.toList());
-        assertThat(clients, containsInAnyOrder("account", "account-console", "admin-cli", "broker", "realm-management", "security-admin-console"));
+        assertThat(clients, containsInAnyOrder("account", "account-console", "admin-cli", "realm-management", "security-admin-console"));
 
         adminClient.realms().realm("new-realm").remove();
 

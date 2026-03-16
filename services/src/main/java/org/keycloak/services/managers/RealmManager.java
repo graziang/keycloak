@@ -140,7 +140,6 @@ public class RealmManager {
         setupMasterAdminManagement(realm);
         setupRealmAdminManagement(realm);
         setupAccountManagement(realm);
-        setupBrokerService(realm);
         setupAdminConsole(realm);
         setupAdminConsoleLocaleMapper(realm);
         setupAdminCli(realm);
@@ -540,23 +539,6 @@ public class RealmManager {
         ImpersonationConstants.setupImpersonationService(session, realm);
     }
 
-    public void setupBrokerService(RealmModel realm) {
-        ClientModel client = realm.getClientByClientId(Constants.BROKER_SERVICE_CLIENT_ID);
-        if (client == null) {
-            client = KeycloakModelUtils.createManagementClient(realm, Constants.BROKER_SERVICE_CLIENT_ID);
-            client.setEnabled(true);
-            client.setAlwaysDisplayInConsole(false);
-            client.setName("${client_" + Constants.BROKER_SERVICE_CLIENT_ID + "}");
-            client.setFullScopeAllowed(false);
-            client.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
-
-            for (String role : Constants.BROKER_SERVICE_ROLES) {
-                RoleModel roleModel = client.addRole(role);
-                roleModel.setDescription("${role_"+ role.toLowerCase().replaceAll("_", "-") +"}");
-            }
-        }
-    }
-
     public RealmModel importRealm(RealmRepresentation rep) {
         return importRealm(rep, () -> {});
     }
@@ -633,7 +615,6 @@ public class RealmManager {
                 setupImpersonationService(realm);
             }
 
-            if (!hasBrokerClient(rep)) setupBrokerService(realm);
             if (!hasAdminConsoleClient(rep)) setupAdminConsole(realm);
 
             boolean postponeAdminCliSetup = false;
@@ -756,10 +737,6 @@ public class RealmManager {
 
     private boolean hasAccountManagementClient(RealmRepresentation rep) {
         return hasClient(rep, Constants.ACCOUNT_MANAGEMENT_CLIENT_ID);
-    }
-
-    private boolean hasBrokerClient(RealmRepresentation rep) {
-        return hasClient(rep, Constants.BROKER_SERVICE_CLIENT_ID);
     }
 
     private boolean hasAdminConsoleClient(RealmRepresentation rep) {
@@ -890,7 +867,6 @@ public class RealmManager {
         KeycloakModelUtils.setupDefaultRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName().toLowerCase());
         setupRealmAdminManagement(realm);
         setupAccountManagement(realm);
-        setupBrokerService(realm);
         setupAdminConsole(realm);
         setupAdminConsoleLocaleMapper(realm);
         setupAdminCli(realm);
