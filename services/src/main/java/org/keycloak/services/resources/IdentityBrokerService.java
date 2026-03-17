@@ -512,6 +512,10 @@ public class IdentityBrokerService implements UserAuthenticationIdentityProvider
             boolean isBrokerAuthorized = brokerClient != null && canReadBrokerToken(token);
             boolean isClientAuthorized = oidcClient.getExternalTokenEnabled() && oidcClient.getExternalAllowedIdentityProviders().contains(providerAlias);
 
+            if (isBrokerAuthorized) {
+                logger.warn("Client 'broker' is deprecated");
+            }
+
             if (!isBrokerAuthorized && !isClientAuthorized) {
                 return corsResponse(forbidden("Client [" + clientModel.getClientId() + "] not authorized to retrieve tokens from identity provider [" + providerAlias + "]."), clientModel);
             }

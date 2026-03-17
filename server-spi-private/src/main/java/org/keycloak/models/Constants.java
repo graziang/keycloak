@@ -34,6 +34,7 @@ public final class Constants {
 
     public static final String ACCOUNT_MANAGEMENT_CLIENT_ID = "account";
     public static final String ACCOUNT_CONSOLE_CLIENT_ID = "account-console";
+    @Deprecated
     public static final String BROKER_SERVICE_CLIENT_ID = "broker";
     public static final String REALM_MANAGEMENT_CLIENT_ID = "realm-management";
 
@@ -44,6 +45,7 @@ public final class Constants {
 
     public static final String INSTALLED_APP_URN = "urn:ietf:wg:oauth:2.0:oob";
 
+    @Deprecated
     public static final String READ_TOKEN_ROLE = "read-token";
     public static final String[] BROKER_SERVICE_ROLES = {READ_TOKEN_ROLE};
     public static final String OFFLINE_ACCESS_ROLE = OAuth2Constants.OFFLINE_ACCESS;

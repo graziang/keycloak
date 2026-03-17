@@ -109,6 +109,7 @@ export const AdvancedSettings = ({
   isOAuth2,
 }: AdvancedSettingsProps) => {
   const { t } = useTranslation();
+  const { adminClient } = useAdminClient();
   const {
     control,
     register,
@@ -141,13 +142,37 @@ export const AdvancedSettings = ({
     control,
     name: "config.supportsClientAssertions",
   });
+
+  const [hasBrokerReadTokenRole, setHasBrokerReadTokenRole] = useState(false);
+  useFetch(
+    async () => {
+      const clients = await adminClient.clients.find({
+        clientId: "broker",
+        max: 1,
+      });
+      const brokerClient = clients?.find((c) => c.clientId === "broker");
+      if (!brokerClient?.id) {
+        return false;
+      }
+      const role = await adminClient.clients.findRole({
+        id: brokerClient.id,
+        roleName: "read-token",
+      });
+      return !!role;
+    },
+    (hasRole) => {
+      setHasBrokerReadTokenRole(hasRole);
+    },
+    [],
+  );
+
   return (
     <>
       {!isOIDC && !isSAML && !isOAuth2 && (
         <TextField field="config.defaultScope" label="scopes" />
       )}
       <SwitchField field="storeToken" label="storeTokens" fieldType="boolean" />
-      {(isSAML || isOIDC || isOAuth2) && (
+      {(isSAML || isOIDC || isOAuth2) && hasBrokerReadTokenRole && (
         <SwitchField
           field="addReadTokenRoleOnCreate"
           label="storedTokensReadable"
