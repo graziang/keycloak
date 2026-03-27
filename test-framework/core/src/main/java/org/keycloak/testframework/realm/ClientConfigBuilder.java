@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
+import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.testframework.util.Collections;
@@ -116,6 +117,10 @@ public class ClientConfigBuilder {
     public ClientConfigBuilder authenticatorType(String authenticatorType) {
         rep.setClientAuthenticatorType(authenticatorType);
         return this;
+    }
+
+    public ClientConfigBuilder dpop(boolean enabled) {
+        return attribute(OIDCConfigAttributes.DPOP_BOUND_ACCESS_TOKENS, String.valueOf(enabled));
     }
 
     public ClientConfigBuilder attribute(String key, String value) {
