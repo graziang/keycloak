@@ -54,6 +54,11 @@ public class AdminClientBuilder {
         return this;
     }
 
+    public AdminClientBuilder useDPoP(boolean useDPoP) {
+        delegate.useDPoP(useDPoP);
+        return this;
+    }
+
     public AdminClientBuilder autoClose() {
         this.close = true;
         return this;
