@@ -62,6 +62,8 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
 
     // Those are set after successfully verified
     protected T token;
+
+    protected AccessToken transformedToken;
     protected ClientModel client;
     protected UserSessionModel userSession;
     protected UserModel user;
@@ -75,25 +77,23 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
     @Override
     public Response introspect(String tokenStr, EventBuilder eventBuilder) {
         this.eventBuilder = eventBuilder;
-        AccessToken accessToken = null;
+
         try {
             ClientModel authenticatedClient = session.getContext().getClient();
 
             ObjectNode tokenMetadata;
             if (introspectionChecks(tokenStr)) {
-                accessToken = transformAccessToken(this.token, userSession);
+                tokenMetadata = JsonSerialization.createObjectNode(transformedToken);
+                tokenMetadata.put("client_id", transformedToken.getIssuedFor());
 
-                tokenMetadata = JsonSerialization.createObjectNode(accessToken);
-                tokenMetadata.put("client_id", accessToken.getIssuedFor());
-
-                String scope = accessToken.getScope();
+                String scope = transformedToken.getScope();
                 if (scope != null && scope.trim().isEmpty()) {
                     tokenMetadata.remove("scope");
                 }
 
                 if (!tokenMetadata.has("username")) {
-                    if (accessToken.getPreferredUsername() != null) {
-                        tokenMetadata.put("username", accessToken.getPreferredUsername());
+                    if (transformedToken.getPreferredUsername() != null) {
+                        tokenMetadata.put("username", transformedToken.getPreferredUsername());
                     } else {
                         UserModel userModel = userSession.getUser();
                         if (userModel != null) {
@@ -109,7 +109,7 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
                     tokenMetadata.putObject("act").put("sub", actor);
                 }
 
-                tokenMetadata.put(OAuth2Constants.TOKEN_TYPE, accessToken.getType());
+                tokenMetadata.put(OAuth2Constants.TOKEN_TYPE, transformedToken.getType());
                 tokenMetadata.put("active", true);
                 eventBuilder.success();
             } else {
@@ -119,17 +119,17 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
             }
 
             // if consumer requests application/jwt return a JWT representation of the introspection contents in an jwt field
-            if (accessToken != null) {
+            if (transformedToken != null) {
                 boolean isJwtRequest = org.keycloak.utils.MediaType.APPLICATION_JWT.equals(session.getContext().getRequestHeaders().getHeaderString(HttpHeaders.ACCEPT));
                 if (isJwtRequest && Boolean.parseBoolean(authenticatedClient.getAttribute(Constants.SUPPORT_JWT_CLAIM_IN_INTROSPECTION_RESPONSE_ENABLED))) {
                     // consumers can use this to convert an opaque token into an JWT based token
-                    tokenMetadata.put("jwt", session.tokens().encode(accessToken));
+                    tokenMetadata.put("jwt", session.tokens().encode(transformedToken));
                 }
             }
 
             return Response.ok(JsonSerialization.writeValueAsBytes(tokenMetadata)).type(MediaType.APPLICATION_JSON_TYPE).build();
         } catch (Exception e) {
-            String clientId = accessToken != null ? accessToken.getIssuedFor() : "unknown";
+            String clientId = transformedToken != null ? transformedToken.getIssuedFor() : "unknown";
             logger.debugf(e, "Exception during Keycloak introspection for %s client in realm %s", clientId, realm.getName());
             eventBuilder.detail(Details.REASON, e.getMessage());
             eventBuilder.error(Errors.TOKEN_INTROSPECTION_FAILED);
@@ -214,7 +214,14 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
             return false;
         }
 
+
         if (!verifyTokenReuse()) {
+            return false;
+        }
+
+        transformedToken = transformAccessToken(this.token, userSession);
+
+        if (!verifyAudienceInTransformedToken(transformedToken)) {
             return false;
         }
 
@@ -287,6 +294,20 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
         }
     }
 
+    protected boolean verifyAudienceInTransformedToken(AccessToken transformedToken) {
+        ClientModel authenticatedClient = session.getContext().getClient();
+
+        // Check if the authenticated client is in the transformed token's audience
+        if (transformedToken.hasAudience(authenticatedClient.getClientId())) {
+            return true;
+        }
+
+        logger.debugf("Introspection denied: client '%s' not in audience of token for '%s'",
+                authenticatedClient.getClientId(), transformedToken.getIssuedFor());
+        eventBuilder.detail(Details.REASON, String.format("Client '%s' is not in the token audience", authenticatedClient.getClientId()));
+        eventBuilder.error(Errors.INVALID_TOKEN);
+        return false;
+    }
 
     protected UserSessionUtil.UserSessionValidationResult verifyUserSession() {
         return UserSessionUtil.findValidSessionForAccessToken(session, realm, token, client, (invalidUserSession -> {}));
