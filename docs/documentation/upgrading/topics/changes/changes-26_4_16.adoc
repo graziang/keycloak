@@ -19,3 +19,11 @@ This prevents a mutated form of a protected resource's URI from evading its conf
 Resources configured with a full absolute URI (a scheme and authority, for example `+https://my.domain/api/admin+`) are unaffected beyond their path component — the scheme and authority are preserved, and only the path is normalized.
 
 If your Authorization Services configuration relies on distinguishing resources by matrix parameters, dot segments, trailing slashes, or query string/fragment content in the resource URI, review your resource and policy configuration, since these are now treated as equivalent to their normalized form.
+
+=== Disabled clients are no longer added to the token audience
+
+A disabled or removed client is never added to the `aud` claim of a token, and its client roles are not present in the `resource_access` claim.
+Tokens are still issued, only without that client, so logins and refreshes keep succeeding.
+This change addresses CVE-2026-93999.
+
+For more details, see link:{adminguide_link}#_audience_disabled_clients[Disabled clients and the audience] in the {adminguide_name}.
