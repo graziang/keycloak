@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import jakarta.ws.rs.BadRequestException;
@@ -35,11 +36,15 @@ import org.keycloak.client.registration.ClientRegistrationException;
 import org.keycloak.client.registration.HttpErrorException;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.jose.jws.JWSInput;
+import org.keycloak.models.CibaConfig;
+import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.mappers.FullNameMapper;
 import org.keycloak.protocol.oidc.mappers.HardcodedRole;
 import org.keycloak.protocol.oidc.mappers.UserAttributeMapper;
 import org.keycloak.protocol.oidc.mappers.UserPropertyMapper;
+import org.keycloak.protocol.saml.SamlConfigAttributes;
+import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.protocol.saml.mappers.UserAttributeStatementMapper;
 import org.keycloak.protocol.saml.mappers.UserPropertyAttributeStatementMapper;
 import org.keycloak.representations.idm.ClientInitialAccessCreatePresentation;
@@ -214,6 +219,115 @@ public class ClientRegistrationPoliciesTest extends AbstractClientRegistrationTe
         reg.oidc().update(client);
     }
 
+
+
+    @Test
+    public void testAnonCreateWithClientUris() throws Exception {
+        setTrustedHost("localhost");
+
+        assertOidcCreateFail(c -> c.setPostLogoutRedirectUris(List.of("http://untrusted.host/logout")), "URI doesn't match");
+        assertOidcCreateFail(c -> c.setRequestUris(List.of("http://untrusted.host/request")), "URI doesn't match");
+        assertOidcCreateFail(c -> c.setBackchannelLogoutUri("http://untrusted.host/backchannel-logout"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setFrontChannelLogoutUri("http://untrusted.host/frontchannel-logout"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setLogoUri("http://untrusted.host/logo"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setPolicyUri("http://untrusted.host/policy"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setTosUri("http://untrusted.host/tos"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setJwksUri("http://untrusted.host/jwks"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setSectorIdentifierUri("http://untrusted.host/sector"), "URL doesn't match");
+        assertOidcCreateFail(c -> c.setBackchannelClientNotificationEndpoint("http://untrusted.host/ciba"), "URL doesn't match");
+
+        // A protocol-relative URI carries its own authority, so it must not be resolved against the
+        // root URL. The front-channel logout iframe renders it as is, reaching the untrusted host
+        assertOidcCreateFail(c -> c.setFrontChannelLogoutUri("//untrusted.host/frontchannel-logout"), "URL is malformed");
+
+        // Trusted URIs are accepted, "+" just refers to the redirect URIs
+        OIDCClientRepresentation client = createRepOidc();
+        client.setPostLogoutRedirectUris(Collections.singletonList("+"));
+        client.setRequestUris(List.of("http://localhost:8080/request"));
+        client.setBackchannelLogoutUri("http://localhost:8080/backchannel-logout");
+        client.setFrontChannelLogoutUri("http://localhost:8080/frontchannel-logout");
+        OIDCClientRepresentation oidcClientRep = reg.oidc().create(client);
+        reg.auth(Auth.token(oidcClientRep));
+
+        // Fail update as well
+        oidcClientRep.setPostLogoutRedirectUris(List.of("http://untrusted.host/logout"));
+        assertOidcFail(ClientRegOp.UPDATE, oidcClientRep, 403, "URI doesn't match");
+
+        oidcClientRep.setPostLogoutRedirectUris(List.of("http://localhost:8080/logout"));
+        reg.oidc().update(oidcClientRep);
+    }
+
+
+    @Test
+    public void testAnonCreateWithClientUrisDefaultProvider() throws Exception {
+        setTrustedHost("localhost");
+
+        // The default provider sets the attributes directly, without going through the OIDC converter
+        ClientRepresentation client = createRep("client-uris-client");
+        client.setRootUrl("http://localhost:8080");
+
+        client.setAttributes(Map.of(OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS, "+##http://untrusted.host/logout"));
+        assertFail(ClientRegOp.CREATE, client, 403, "URI doesn't match");
+
+        // The authority of a protocol-relative URI must not be hidden behind the trusted root URL
+        client.setAttributes(Map.of(OIDCConfigAttributes.FRONT_CHANNEL_LOGOUT_URI, "//untrusted.host/frontchannel-logout"));
+        assertFail(ClientRegOp.CREATE, client, 403, "URL is malformed");
+
+        client.setAttributes(Map.of(OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS, "+##http://localhost:8080/logout"));
+        reg.create(client);
+    }
+
+
+    private void assertOidcCreateFail(Consumer<OIDCClientRepresentation> uriSetter, String expectedErrorContains) {
+        OIDCClientRepresentation client = createRepOidc();
+        uriSetter.accept(client);
+        assertOidcFail(ClientRegOp.CREATE, client, 403, expectedErrorContains);
+    }
+
+    @Test
+    public void testSamlPartialUpdateWithTrustedHost() throws Exception {
+        setTrustedHost("localhost");
+        ClientRepresentation client = createRep("partial-saml-uris");
+        client.setProtocol(SamlProtocol.LOGIN_PROTOCOL);
+        client.setRedirectUris(List.of("https://localhost/callback"));
+        ClientRepresentation registered = reg.create(client);
+        reg.auth(Auth.token(registered));
+
+        for (String attribute : List.of(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_POST_ATTRIBUTE,
+                SamlConfigAttributes.SAML_METADATA_DESCRIPTOR_URL)) {
+            ClientRepresentation update = new ClientRepresentation();
+            update.setClientId(registered.getClientId());
+            update.setAttributes(Map.of(attribute, "https://untrusted.host/endpoint"));
+            assertFail(ClientRegOp.UPDATE, update, 403, "URL doesn't match");
+            Assertions.assertNotEquals("https://untrusted.host/endpoint",
+                    managedRealm.admin().clients().get(registered.getId()).toRepresentation().getAttributes().get(attribute));
+
+            update.setAttributes(Map.of(attribute, "https://localhost/endpoint"));
+            ClientRepresentation updated = reg.update(update);
+            reg.auth(Auth.token(updated));
+            Assertions.assertEquals(SamlProtocol.LOGIN_PROTOCOL, updated.getProtocol());
+            Assertions.assertEquals("https://localhost/endpoint", updated.getAttributes().get(attribute));
+        }
+    }
+
+    @Test
+    public void testAdditionalClientUriAttributesOnCreateAndUpdate() throws Exception {
+        setTrustedHost("localhost");
+        for (String attribute : List.of(OIDCConfigAttributes.LOGO_URI, OIDCConfigAttributes.POLICY_URI,
+                OIDCConfigAttributes.TOS_URI, OIDCConfigAttributes.JWKS_URL, OIDCConfigAttributes.SECTOR_IDENTIFIER_URI,
+                CibaConfig.CIBA_BACKCHANNEL_CLIENT_NOTIFICATION_ENDPOINT)) {
+            reg.auth(null);
+            ClientRepresentation client = createRep("uri-" + attribute);
+            client.setAttributes(Map.of(attribute, "http://untrusted.host/endpoint"));
+            assertFail(ClientRegOp.CREATE, client, 403, "URL doesn't match");
+
+            client.setAttributes(Map.of(attribute, "http://localhost/endpoint"));
+            ClientRepresentation registered = reg.create(client);
+            reg.auth(Auth.token(registered));
+            registered.getAttributes().put(attribute, "http://untrusted.host/endpoint");
+            assertFail(ClientRegOp.UPDATE, registered, 403, "URL doesn't match");
+        }
+    }
 
 
     @Test

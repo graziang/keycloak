@@ -239,8 +239,19 @@ It is good practice to add as much protection as possible for these URIs to prev
 Keycloak, with client policies, provides specific executors to protect the various client URIs:
 
 * *Secure Client URIs*: A generic executor that enforces all client URIs to only accept HTTPS and to not accept any wildcards.
+* *SAML Secure Client URIs*: Enforces HTTPS for the common client URLs and SAML endpoint and metadata descriptor URLs. Wildcard redirect URIs can be enabled through its configuration.
 * *Secure Redirect URIs Enforcer*: An executor that allows different levels of validations for redirect URIs, such as IPv4 and IPv6 loopback addresses, HTTP scheme, wildcards, only permitted domains, or ensuring OAuth 2.1 compliance.
 * *Secure Client URIs Pattern Executor*: This executor is the most generic and flexible for validating client URLs. It allows you to select from a list only the URIs you want to validate, and then validates them providing a list of permitted pattern using regular expressions. Explore this <<ssrf,dedicated section>> to see how this executor can be used to prevent an SSRF attack.
+
+The Secure Client URIs and Secure Client URIs Pattern executors use the same set of client URI fields as basic client validation
+and the Trusted Hosts client registration policy. This includes client URLs, redirects, web origins, logout endpoints,
+JWKS and request URIs, the CIBA notification endpoint, logo, policy, terms of service and sector identifier URIs,
+and SAML endpoint and metadata URLs for SAML clients. Each validator applies its own constraints to these fields.
+The Secure Client URIs executor and Trusted Hosts policy resolve the `+` reference in web origins and post-logout redirect URIs
+using the client's redirect URIs; `-` disables post-logout redirects.
+For compatibility with existing regular expressions, the Secure Client URIs Pattern executor matches the configured values literally,
+including markers such as `+`, `-`, and `*`. Include patterns for these literal values when they are allowed by your policy.
+Basic client validation also preserves support for legacy web origin entries without a scheme, such as `127.0.0.1:8080`.
 
 [[_full_scope_disabled_policy]]
 == Enforcing Full Scope Allowed to be disabled

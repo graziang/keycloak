@@ -35,7 +35,6 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.LoginProtocolFactory;
 import org.keycloak.protocol.ProtocolMapperConfigException;
-import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.grants.ciba.CibaClientValidation;
@@ -44,7 +43,6 @@ import org.keycloak.protocol.oidc.utils.AcrUtils;
 import org.keycloak.protocol.oidc.utils.PairwiseSubMapperUtils;
 import org.keycloak.protocol.oidc.utils.PairwiseSubMapperValidator;
 import org.keycloak.protocol.oidc.utils.SubjectType;
-import org.keycloak.protocol.saml.SamlConfigAttributes;
 import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.oidc.OIDCClientRepresentation;
@@ -60,167 +58,6 @@ import static org.keycloak.services.managers.ResourceAdminManager.CLIENT_SESSION
 public class DefaultClientValidationProvider implements ClientValidationProvider {
 
     private static final Logger logger = Logger.getLogger(DefaultClientValidationProvider.class);
-
-    private enum FieldMessages {
-        ROOT_URL("rootUrl",
-                "Root URL is not a valid URL", "clientRootURLInvalid",
-                "Root URL must not contain an URL fragment", "clientRootURLFragmentError",
-                "Root URL uses an illegal scheme", "clientRootURLIllegalSchemeError"),
-
-        BASE_URL("baseUrl",
-                "Base URL is not a valid URL", "clientBaseURLInvalid",
-                null, null,
-                "Base URL uses an illegal scheme", "clientBaseURLIllegalSchemeError"),
-
-        REDIRECT_URIS("redirectUris",
-                "A redirect URI is not a valid URI", "clientRedirectURIsInvalid",
-                "A redirect URI must not contain an URL fragment", "clientRedirectURIsFragmentError",
-                "A redirect URI uses an illegal scheme", "clientRedirectURIsIllegalSchemeError"),
-
-        POST_LOGOUT_REDIRECT_URIS("postLogoutUris",
-                "A post-logout redirect URI is not a valid URI", "clientPostLogoutRedirectURIsInvalid",
-                "A post-logout redirect URI must not contain an URL fragment", "clientPostLogoutRedirectURIsFragmentError",
-                "A post-logout redirect URI uses an illegal scheme", "clientPostLogoutRedirectURIsIllegalSchemeError"),
-
-        REQUEST_URIS("requestUris",
-                "Valid request URIs has an invalid value", "requestUrisAreInvalid",
-                null, null,
-                "Valid request URIs has a value with illegal scheme", "requestUrisHasIllegalSchemeError"),
-
-        BACKCHANNEL_LOGOUT_URL("backchannelLogoutUrl",
-                "Backchannel logout URL is not a valid URL", "backchannelLogoutUrlIsInvalid",
-                null, null,
-                "Backchannel logout URL uses an illegal scheme", "backchannelLogoutUrlIllegalSchemeError"),
-
-        LOGO_URI(ClientModel.LOGO_URI,
-                "Logo URL is not a valid URL", "logoURLInvalid",
-                null, null,
-                "Logo URL uses an illegal scheme", "logoURLIllegalSchemeError"),
-
-        POLICY_URI(ClientModel.POLICY_URI,
-                "Policy URL is not a valid URL", "policyURLInvalid",
-                null, null,
-                "Policy URL uses an illegal scheme", "policyURLIllegalSchemeError"),
-
-        TOS_URI(ClientModel.TOS_URI,
-                "Terms of service URL is not a valid URL", "tosURLInvalid",
-                null, null,
-                "Terms of service URL uses an illegal scheme", "tosURLIllegalSchemeError"),
-
-        ADMIN_URL("adminUrl",
-                "Admin URL is not a valid URL", "adminURLInvalid",
-                null, null,
-                "Admin URL uses an illegal scheme", "adminURLIllegalSchemeError"),
-
-        JWKS_URL("jwksUrl",
-                "JWKS URL is not a valid URL", "jwksURLInvalid",
-                null, null,
-                "JWKS URL uses an illegal scheme", "jwksURLIllegalSchemeError"),
-
-        FRONTCHANNEL_LOGOUT_URL("frontchannelLogoutUrl",
-                "Front-channel logout URL is not a valid URL", "frontchannelLogoutUrlInvalid",
-                null, null,
-                "Front-channel logout URL uses an illegal scheme", "frontchannelLogoutUrlIllegalSchemeError"),
-
-        SAML_ADMIN_URL("masterSamlProcessingUrl",
-                "Master SAML Processing URL is not a valid URL", "adminUrlURLInvalid",
-                null, null,
-                "Master SAML Processing URL uses an illegal scheme", "adminUrlURLIllegalSchemeError"),
-
-        SAML_ASSERTION_CONSUMER_URL_POST_URI(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_POST_ATTRIBUTE,
-                "Assertion Consumer Service POST Binding URL is not a valid URL", "samlAssertionConsumerUrlPostURLInvalid",
-                null, null,
-                "Assertion Consumer Service POST Binding URL uses an illegal scheme", "samlAssertionConsumerUrlPostURLIllegalSchemeError"),
-
-        SAML_ASSERTION_CONSUMER_URL_REDIRECT_URI(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_REDIRECT_ATTRIBUTE,
-                "Assertion Consumer Service Redirect Binding URL is not a valid URL", "samlAssertionConsumerUrlRedirectURLInvalid",
-                null, null,
-                "Assertion Consumer Service Redirect Binding URL uses an illegal scheme", "samlAssertionConsumerUrlRedirectURLIllegalSchemeError"),
-
-        SAML_ASSERTION_CONSUMER_URL_ARTIFACT_URI(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_ARTIFACT_ATTRIBUTE,
-                "Artifact Binding URL is not a valid URL", "samlAssertionConsumerUrlArtifactURLInvalid",
-                null, null,
-                "Artifact Binding URL uses an illegal scheme", "samlAssertionConsumerUrlArtifactURLIllegalSchemeError"),
-
-        SAML_SINGLE_LOGOUT_SERVICE_URL_POST_URI(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_POST_ATTRIBUTE,
-                "Logout Service POST Binding URL is not a valid URL", "samlLogoutServiceUrlPostURLInvalid",
-                null, null,
-                "Logout Service POST Binding URL uses an illegal scheme", "samlLogoutServiceUrlPostURLIllegalSchemeError"),
-
-        SAML_SINGLE_LOGOUT_SERVICE_URL_ARTIFACT_URI(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_ARTIFACT_ATTRIBUTE,
-                "Logout Service ARTIFACT Binding URL is not a valid URL", "samlLogoutServiceUrlArtifactURLInvalid",
-                null, null,
-                "Logout Service ARTIFACT Binding URL uses an illegal scheme", "samlLogoutServiceUrlArtifactURLIllegalSchemeError"),
-
-        SAML_SINGLE_LOGOUT_SERVICE_URL_REDIRECT_URI(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_REDIRECT_ATTRIBUTE,
-                "Logout Service Redirect Binding URL is not a valid URL", "samlLogoutServiceUrlRedirectURLInvalid",
-                null, null,
-                "Logout Service Redirect Binding URL uses an illegal scheme", "samlLogoutServiceUrlRedirectURLIllegalSchemeError"),
-
-        SAML_SINGLE_LOGOUT_SERVICE_URL_SOAP_URI(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_SOAP_ATTRIBUTE,
-                "Logout Service SOAP Binding URL is not a valid URL", "samlLogoutServiceUrlSoapURLInvalid",
-                null, null,
-                "Logout Service SOAP Binding URL uses an illegal scheme", "samlAssertionConsumerUrlPostURLIllegalSchemeError"),
-
-        SAML_ARTIFACT_RESOLUTION_SERVICE_URL_URI(SamlProtocol.SAML_ARTIFACT_RESOLUTION_SERVICE_URL_ATTRIBUTE,
-                "Artifact Resolution Service is not a valid URL", "samlAssertionConsumerUrlPostURLInvalid",
-                null, null,
-                "Artifact Resolution Service uses an illegal scheme", "samlAssertionConsumerUrlPostURLIllegalSchemeError"),
-
-        SAML_METADATA_DESCRIPTOR_URL(SamlConfigAttributes.SAML_METADATA_DESCRIPTOR_URL,
-                "Metadata descriptor URL is not a valid URL", SamlConfigAttributes.SAML_METADATA_DESCRIPTOR_URL,
-                null, null,
-                "Metadata descriptor URL uses an illegal scheme", SamlConfigAttributes.SAML_METADATA_DESCRIPTOR_URL);
-
-        private String fieldId;
-
-        private String invalid;
-        private String invalidKey;
-
-        private String fragment;
-        private String fragmentKey;
-
-        private String scheme;
-        private String schemeKey;
-
-        FieldMessages(String fieldId, String invalid, String invalidKey, String fragment, String fragmentKey, String scheme, String schemeKey) {
-            this.fieldId = fieldId;
-            this.invalid = invalid;
-            this.invalidKey = invalidKey;
-            this.fragment = fragment;
-            this.fragmentKey = fragmentKey;
-            this.scheme = scheme;
-            this.schemeKey = schemeKey;
-        }
-
-        public String getFieldId() {
-            return fieldId;
-        }
-
-        public String getInvalid() {
-            return invalid;
-        }
-
-        public String getInvalidKey() {
-            return invalidKey;
-        }
-
-        public String getFragment() {
-            return fragment;
-        }
-
-        public String getFragmentKey() {
-            return fragmentKey;
-        }
-
-        public String getScheme() {
-            return scheme;
-        }
-
-        public String getSchemeKey() {
-            return schemeKey;
-        }
-    }
 
     // TODO Before adding more validation consider using a library for validation
     @Override
@@ -284,87 +121,52 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
 
     private void validateUrls(ValidationContext<ClientModel> context) {
         ClientModel client = context.getObjectToValidate();
-        OIDCAdvancedConfigWrapper clientWrapper = OIDCAdvancedConfigWrapper.fromClientModel(client);
-
-
-        // Use a fake URL for validating relative URLs as we may not be validating clients in the context of a request (import at startup)
+        // A fake server URL allows validation during startup imports, without a request context.
         String authServerUrl = "https://localhost/auth";
-
         String rootUrl = ResolveRelative.resolveRootUrl(authServerUrl, authServerUrl, client.getRootUrl());
-
-        // don't need to use actual rootUrl here as it'd interfere with others URL validations
-        String baseUrl = ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, authServerUrl, client.getBaseUrl());
-
-        String backchannelLogoutUrl = clientWrapper.getBackchannelLogoutUrl();
-        String resolvedBackchannelLogoutUrl =
-                ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, authServerUrl, backchannelLogoutUrl);
-
-        checkUri(FieldMessages.ROOT_URL, rootUrl, context, true, true);
-        checkUri(FieldMessages.BASE_URL, baseUrl, context, true, false);
-        checkUri(FieldMessages.BACKCHANNEL_LOGOUT_URL, resolvedBackchannelLogoutUrl, context, true, false);
-        client.getRedirectUris().stream()
-                .map(u -> ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, rootUrl, u))
-                .forEach(u -> checkUri(FieldMessages.REDIRECT_URIS, u, context, false, true));
-
-        List<String> postLogoutRedirectUris = clientWrapper.getAttributeMultivalued(OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS);
-        postLogoutRedirectUris.stream()
-                .filter(uri -> !"-".equals(uri) && !"+".equals(uri) && !"*".equals(uri)) // In case of "+", the redirect-uris would be validated, so no need to repeat the error message again
-                .map(u -> ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, rootUrl, u))
-                .forEach(u -> checkUri(FieldMessages.POST_LOGOUT_REDIRECT_URIS, u, context, false, true));
-
-        List<String> requestUris = clientWrapper.getRequestUris();
-        requestUris.stream()
-                .map(u -> ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, rootUrl, u))
-                .forEach(u -> checkUri(FieldMessages.REQUEST_URIS, u, context, false, false));
-
-        // For SAML, it is tested below
-        if (OIDCLoginProtocol.LOGIN_PROTOCOL.equals(client.getProtocol())) {
-            String adminUrl = ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, rootUrl, client.getManagementUrl());
-            if (adminUrl != null && adminUrl.contains(CLIENT_SESSION_HOST_PROPERTY)) {
-                // Fake hostname just for validation
-                adminUrl = adminUrl.replace(CLIENT_SESSION_HOST_PROPERTY, "localhost");
+        for (ClientUriField field : ClientUriField.values()) {
+            if (!field.appliesTo(client.getProtocol()) || field == ClientUriField.CIBA_NOTIFICATION_ENDPOINT) {
+                // CIBA also validates realm SSL requirements and required metadata in CibaClientValidation.
+                continue;
             }
-            checkUri(FieldMessages.ADMIN_URL, adminUrl, context, true, false);
-        }
-        String jwksUrl = ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, rootUrl, clientWrapper.getJwksUrl());
-        checkUri(FieldMessages.JWKS_URL, jwksUrl, context, true, false);
-        String frontchannelLogoutUrl = ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, rootUrl, clientWrapper.getFrontChannelLogoutUrl());
-        checkUri(FieldMessages.FRONTCHANNEL_LOGOUT_URL, frontchannelLogoutUrl, context, true, false);
-
-        checkUriLogo(FieldMessages.LOGO_URI, client.getAttribute(ClientModel.LOGO_URI), context);
-        checkUri(FieldMessages.POLICY_URI, client.getAttribute(ClientModel.POLICY_URI), context, true, false);
-        checkUri(FieldMessages.TOS_URI, client.getAttribute(ClientModel.TOS_URI), context, true, false);
-
-        // extra validation URLs for SAML clients
-        if (SamlProtocol.LOGIN_PROTOCOL.equals(client.getProtocol())) {
-            checkUri(FieldMessages.SAML_ADMIN_URL, client.getManagementUrl(), context, true, false);
-            checkUri(FieldMessages.SAML_ASSERTION_CONSUMER_URL_POST_URI, client.getAttribute(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_POST_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_ASSERTION_CONSUMER_URL_REDIRECT_URI, client.getAttribute(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_REDIRECT_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_ASSERTION_CONSUMER_URL_ARTIFACT_URI, client.getAttribute(SamlProtocol.SAML_ASSERTION_CONSUMER_URL_ARTIFACT_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_SINGLE_LOGOUT_SERVICE_URL_POST_URI, client.getAttribute(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_POST_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_SINGLE_LOGOUT_SERVICE_URL_ARTIFACT_URI, client.getAttribute(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_ARTIFACT_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_SINGLE_LOGOUT_SERVICE_URL_REDIRECT_URI, client.getAttribute(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_REDIRECT_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_SINGLE_LOGOUT_SERVICE_URL_SOAP_URI, client.getAttribute(SamlProtocol.SAML_SINGLE_LOGOUT_SERVICE_URL_SOAP_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_ARTIFACT_RESOLUTION_SERVICE_URL_URI, client.getAttribute(SamlProtocol.SAML_ARTIFACT_RESOLUTION_SERVICE_URL_ATTRIBUTE), context, true, false);
-            checkUri(FieldMessages.SAML_METADATA_DESCRIPTOR_URL, client.getAttribute(SamlConfigAttributes.SAML_METADATA_DESCRIPTOR_URL), context, true, false);
+            for (String value : field.getValues(client)) {
+                if (field.isSpecialValue(value)) {
+                    continue;
+                }
+                String url = value;
+                if (field == ClientUriField.ROOT_URL) {
+                    url = rootUrl;
+                } else if (field.allowsRelativeUri()) {
+                    String validationRoot = field == ClientUriField.BASE_URL || field == ClientUriField.BACKCHANNEL_LOGOUT_URL ? authServerUrl : rootUrl;
+                    url = ResolveRelative.resolveRelativeUri(authServerUrl, authServerUrl, validationRoot, value);
+                }
+                if (field == ClientUriField.ADMIN_URL && url != null) {
+                    url = url.replace(CLIENT_SESSION_HOST_PROPERTY, "localhost");
+                }
+                if (field == ClientUriField.LOGO_URI) {
+                    checkUriLogo(field, url, context);
+                } else {
+                    checkUri(field, url, context, field.requiresUrl(), field.checksFragment());
+                }
+            }
         }
     }
 
 
-    private void checkUri(FieldMessages field, String url, ValidationContext<ClientModel> context, boolean checkValidUrl, boolean checkFragment) {
+    private void checkUri(ClientUriField field, String url, ValidationContext<ClientModel> context, boolean checkValidUrl, boolean checkFragment) {
         if (url == null || url.isEmpty()) {
             return;
         }
 
         try {
             String urlToCheck=url;
-            if(field==FieldMessages.BACKCHANNEL_LOGOUT_URL){
+            if(field==ClientUriField.BACKCHANNEL_LOGOUT_URL){
                 if(checkCurlyBracketsBalanced(url))
                     // This allow user to set parametrized backchannel logout url in this format : http://{example}/{example2}
                     urlToCheck=url.replace("{","%7B").replace("}","%7D");
                 else throw new MalformedURLException();
             }
-            URI uri = new URI(urlToCheck);
+            URI uri = field == ClientUriField.WEB_ORIGINS ? parseWebOrigin(urlToCheck) : new URI(urlToCheck);
 
             boolean valid = true;
             if (uri.getScheme() != null && (uri.getScheme().equalsIgnoreCase("data") || uri.getScheme().equalsIgnoreCase("javascript"))) {
@@ -388,6 +190,19 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
 
         catch (MalformedURLException | IllegalArgumentException | URISyntaxException e) {
             context.addError(field.getFieldId(), field.getInvalid(), field.getInvalidKey());
+        }
+    }
+
+    private URI parseWebOrigin(String origin) throws URISyntaxException {
+        try {
+            return new URI(origin);
+        } catch (URISyntaxException e) {
+            // Legacy origins can omit the scheme, including numeric hosts with a port.
+            URI authority = new URI("http://" + origin).parseServerAuthority();
+            if (authority.getHost() != null && authority.getRawUserInfo() == null && origin.equals(authority.getRawAuthority())) {
+                return authority;
+            }
+            throw e;
         }
     }
 
@@ -421,7 +236,7 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
         return stack.isEmpty();
     }
 
-    private void checkUriLogo(FieldMessages field, String url, ValidationContext<ClientModel> context) {
+    private void checkUriLogo(ClientUriField field, String url, ValidationContext<ClientModel> context) {
         if (url == null || url.isEmpty()) {
             return;
         }

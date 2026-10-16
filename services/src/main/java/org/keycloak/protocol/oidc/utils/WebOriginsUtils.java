@@ -17,12 +17,10 @@
 
 package org.keycloak.protocol.oidc.utils;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.Set;
 
-import org.keycloak.common.util.UriUtils;
 import org.keycloak.models.ClientModel;
-import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 
 /**
@@ -31,20 +29,10 @@ import org.keycloak.models.KeycloakSession;
 public class WebOriginsUtils {
 
     public static Set<String> resolveValidWebOrigins(KeycloakSession session, ClientModel client) {
-        Set<String> origins = new HashSet<>();
-        if (client.getWebOrigins() != null) {
-            origins.addAll(client.getWebOrigins());
-        }
-        if (origins.contains(Constants.INCLUDE_REDIRECTS)) {
-            origins.remove(Constants.INCLUDE_REDIRECTS);
-            for (String redirectUri : RedirectUtils.resolveValidRedirects(session, client.getRootUrl(), client.getRedirectUris())) {
-                if (redirectUri.regionMatches(true, 0, "http://", 0, 7)
-                        || redirectUri.regionMatches(true, 0, "https://", 0, 8)) {
-                    origins.add(UriUtils.getOrigin(redirectUri));
-                }
-            }
-        }
-        return origins;
+        return RedirectUtils.resolveUrlsWithRedirects(session,
+                client.getWebOrigins() == null ? null : new ArrayList<>(client.getWebOrigins()),
+                client.getRootUrl(),
+                client.getRedirectUris() == null ? null : new ArrayList<>(client.getRedirectUris()), true);
     }
 
 }

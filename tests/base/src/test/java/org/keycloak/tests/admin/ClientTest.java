@@ -382,7 +382,7 @@ public class ClientTest {
 
     @Test
     public void testInvalidUrlClientValidation() {
-        List<String> urlsToValidate = List.of("Root URL", "Base URL");
+        List<String> urlsToValidate = List.of("Root URL", "Base URL", "Sector identifier URI");
         testClientUriValidation(urlsToValidate, " is not a valid URL",
                 "invalid", "myapp://some-fake-app");
     }
@@ -390,7 +390,8 @@ public class ClientTest {
     @Test
     public void testIllegalSchemeClientValidation() {
         List<String> urlsToValidate = List.of("Root URL", "Base URL", "Backchannel logout URL", "A redirect URI", "A post-logout redirect URI",
-                "Admin URL", "JWKS URL", "Logo URL", "Front-channel logout URL", "CIBA notification endpoint", "Valid request URIs");
+                "Admin URL", "JWKS URL", "Logo URL", "Front-channel logout URL", "CIBA notification endpoint", "Valid request URIs",
+                "Policy URL", "Terms of service URL", "Sector identifier URI", "A web origin");
         testClientUriValidation(urlsToValidate, " uses an illegal scheme",
                 "data:text/html;base64,PHNjcmlwdD5jb25maXJtKGRvY3VtZW50LmRvbWFpbik7PC9zY3JpcHQ+",
                 "DaTa:text/html;base64,PHNjcmlwdD5jb25maXJtKGRvY3VtZW50LmRvbWFpbik7PC9zY3JpcHQ+",
@@ -406,6 +407,36 @@ public class ClientTest {
         testClientUriValidation(urlsToValidate, " must not contain an URL fragment",
                 "http://redhat.com/abcd#someFragment"
         );
+    }
+
+    @Test
+    public void testMalformedWebOriginClientValidation() {
+        for (boolean create : List.of(false, true)) {
+            ClientRepresentation client = create ? ClientBuilder.create().clientId("invalid-web-origin").build() : createClient();
+            for (String origin : List.of("https://localhost/white space", "127.0.0.1:invalid", "[::1", "123.example.com:8080/path", "123@example.com:8080")) {
+                client.setWebOrigins(List.of(origin));
+                createOrUpdateClientExpectingValidationErrors(client, create, "A web origin is not a valid URI");
+            }
+        }
+    }
+
+    @Test
+    public void testClientUriSpecialValues() {
+        ClientRepresentation client = createClient();
+        client.setRootUrl("https://localhost");
+        client.setBaseUrl("/home");
+        client.setAdminUrl("/admin");
+        client.setRedirectUris(List.of("/callback", "https://localhost/*"));
+        client.setWebOrigins(List.of("+", "*", "null", "127.0.0.1:8080", "123.example.com:8443", "[::1]:8080"));
+        client.setAttributes(Map.of(
+                OIDCConfigAttributes.LOGO_URI, "data:image/png;base64,aW1hZ2U=",
+                OIDCConfigAttributes.POST_LOGOUT_REDIRECT_URIS, "+##-",
+                OIDCConfigAttributes.BACKCHANNEL_LOGOUT_URL, "/backchannel-logout",
+                OIDCConfigAttributes.FRONT_CHANNEL_LOGOUT_URI, "/frontchannel-logout"));
+        ClientResource resource = managedRealm.admin().clients().get(client.getId());
+        resource.update(client);
+        assertEquals(client.getAttributes().get(OIDCConfigAttributes.LOGO_URI), resource.toRepresentation().getAttributes().get(OIDCConfigAttributes.LOGO_URI));
+        assertEquals(Set.copyOf(client.getWebOrigins()), Set.copyOf(resource.toRepresentation().getWebOrigins()));
     }
 
     @Test
@@ -547,6 +578,25 @@ public class ClientTest {
                 createOrUpdateClientExpectingValidationErrors(rep, create, expectedValidRequestURIsError);
             }
             OIDCAdvancedConfigWrapper.fromClientRepresentation(rep).setRequestUris(null);
+
+            for (Map.Entry<String, String> field : Map.of(
+                    OIDCConfigAttributes.POLICY_URI, "Policy URL",
+                    OIDCConfigAttributes.TOS_URI, "Terms of service URL",
+                    OIDCConfigAttributes.SECTOR_IDENTIFIER_URI, "Sector identifier URI").entrySet()) {
+                if (urlsToValidate.contains(field.getValue())) {
+                    if (rep.getAttributes() == null) {
+                        rep.setAttributes(new HashMap<>());
+                    }
+                    rep.getAttributes().put(field.getKey(), testUrl);
+                    createOrUpdateClientExpectingValidationErrors(rep, create, field.getValue() + errorSuffix);
+                    rep.getAttributes().remove(field.getKey());
+                }
+            }
+            if (urlsToValidate.contains("A web origin")) {
+                rep.setWebOrigins(List.of(testUrl));
+                createOrUpdateClientExpectingValidationErrors(rep, create, "A web origin" + errorSuffix);
+                rep.setWebOrigins(null);
+            }
 
             if (expectedRootUrlError != null) {
                 rep.setRootUrl(testUrl);

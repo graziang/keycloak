@@ -26,18 +26,17 @@ import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import org.keycloak.component.ComponentModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.protocol.oidc.utils.PairwiseSubMapperUtils;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.clientregistration.ClientRegistrationContext;
 import org.keycloak.services.clientregistration.ClientRegistrationProvider;
 import org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy;
 import org.keycloak.services.clientregistration.policy.ClientRegistrationPolicyException;
+import org.keycloak.validation.ClientUriField;
 
 import org.jboss.logging.Logger;
 
@@ -71,6 +70,10 @@ public class TrustedHostClientRegistrationPolicy implements ClientRegistrationPo
     public void beforeUpdate(ClientRegistrationContext context, ClientModel clientModel) throws ClientRegistrationPolicyException {
         verifyHost();
         verifyClientUrls(context);
+        // Preserve the validation hook, then check fields selected by the retained protocol.
+        if (context.getClient().getProtocol() == null && clientModel != null) {
+            verifyClientUrls(context, clientModel);
+        }
     }
 
     @Override
@@ -212,6 +215,10 @@ public class TrustedHostClientRegistrationPolicy implements ClientRegistrationPo
 
 
     protected void verifyClientUrls(ClientRegistrationContext context) throws ClientRegistrationPolicyException {
+        verifyClientUrls(context, null);
+    }
+
+    private void verifyClientUrls(ClientRegistrationContext context, ClientModel existingClient) throws ClientRegistrationPolicyException {
         boolean redirectUriMustMatch = isClientUrisMustMatch();
         if (!redirectUriMustMatch) {
             return;
@@ -221,29 +228,22 @@ public class TrustedHostClientRegistrationPolicy implements ClientRegistrationPo
         List<String> trustedDomains = getTrustedDomains();
 
         ClientRepresentation client = context.getClient();
-        String rootUrl = client.getRootUrl();
-        String baseUrl = client.getBaseUrl();
-        String adminUrl = client.getAdminUrl();
-        List<String> redirectUris = client.getRedirectUris();
-
-        baseUrl = relativeToAbsoluteURI(rootUrl, baseUrl);
-        adminUrl = relativeToAbsoluteURI(rootUrl, adminUrl);
-        Set<String> resolvedRedirects = PairwiseSubMapperUtils.resolveValidRedirectUris(rootUrl, redirectUris);
-
-        if (rootUrl != null) {
-            checkURLTrusted(rootUrl, trustedHosts, trustedDomains);
+        String protocol = ClientUriField.getEffectiveProtocol(client, existingClient);
+        for (ClientUriField field : ClientUriField.values()) {
+            if (!field.appliesTo(protocol)) {
+                continue;
+            }
+            for (String value : field.getPolicyValues(session, client)) {
+                String uri = field == ClientUriField.ROOT_URL ? value : relativeToAbsoluteURI(client.getRootUrl(), value);
+                if (uri != null) {
+                    if (field.requiresUrl()) {
+                        checkURLTrusted(uri, trustedHosts, trustedDomains);
+                    } else {
+                        checkURITrusted(uri, trustedHosts, trustedDomains);
+                    }
+                }
+            }
         }
-
-        if (baseUrl != null) {
-            checkURLTrusted(baseUrl, trustedHosts, trustedDomains);
-        }
-        if (adminUrl != null) {
-            checkURLTrusted(adminUrl, trustedHosts, trustedDomains);
-        }
-        for (String redirect : resolvedRedirects) {
-            checkURITrusted(redirect, trustedHosts, trustedDomains);
-        }
-
     }
 
     protected void checkURLTrusted(String url, List<String> trustedHosts, List<String> trustedDomains) throws ClientRegistrationPolicyException {
@@ -279,6 +279,10 @@ public class TrustedHostClientRegistrationPolicy implements ClientRegistrationPo
     }
 
     private boolean checkHostTrusted(String host, List<String> trustedHosts, List<String> trustedDomains) {
+        if (host == null) {
+            return false;
+        }
+
         for (String trustedHost : trustedHosts) {
             if (host.equals(trustedHost)) {
                 return true;
@@ -300,7 +304,7 @@ public class TrustedHostClientRegistrationPolicy implements ClientRegistrationPo
             return null;
         }
 
-        if (!relative.startsWith("/")) {
+        if (!relative.startsWith("/") || relative.startsWith("//")) {
             return relative;
         } else if (rootUrl == null || rootUrl.isEmpty()) {
             return null;
