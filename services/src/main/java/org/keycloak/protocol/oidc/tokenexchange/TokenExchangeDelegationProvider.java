@@ -35,6 +35,7 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenExchangeContext;
 import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
@@ -90,8 +91,9 @@ public class TokenExchangeDelegationProvider extends StandardTokenExchangeProvid
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, "Invalid actor token type", Response.Status.BAD_REQUEST);
         }
 
+        // Token exchange has its own rules for sender-constrained tokens, see validateSenderConstrainedToken()
         AuthenticationManager.AuthResult actorAuthResult = AuthenticationManager.verifyIdentityToken(session, realm, session.getContext().getUri(), clientConnection, true, true, null,
-                false, actorToken, context.getHeaders(), verifier -> {});
+                false, actorToken, context.getHeaders(), TokenVerifierProvider.CallingContext.TOKEN_EXCHANGE, verifier -> {});
         if (actorAuthResult == null) {
             event.detail(Details.REASON, "actor_token validation failure");
             event.error(Errors.INVALID_TOKEN);

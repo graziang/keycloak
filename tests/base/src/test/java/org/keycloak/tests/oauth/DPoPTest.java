@@ -1177,6 +1177,86 @@ public class DPoPTest {
     }
 
     @Test
+    public void testDPoPDynamicClientRegistrationSuccess() throws Exception {
+        KeyPair keyPair = KeyUtils.generateRsaKeyPair(2048);
+        AccessTokenResponse tokenResponse = getDPoPBindAccessTokenForAdmin(keyPair);
+
+        String registrationUrl = getOidcClientRegistrationUrl();
+        String dpopProof = generateDPoPProofForUrl(HttpMethod.POST, registrationUrl, keyPair, tokenResponse.getAccessToken());
+
+        OIDCClientRepresentation clientRep = new OIDCClientRepresentation();
+        clientRep.setClientName(generateSuffixedName("dpop-dcr-client"));
+        clientRep.setClientUri(keycloakUrls.getBase());
+        clientRep.setRedirectUris(Collections.singletonList(oauth.getRedirectUri()));
+
+        String registeredClientId;
+        try (var response = simpleHttp.doPost(registrationUrl)
+                .header(HttpHeaders.AUTHORIZATION, DPOP_SCHEME + " " + tokenResponse.getAccessToken())
+                .header(DPOP_HTTP_HEADER, dpopProof)
+                .json(clientRep)
+                .asResponse()) {
+            assertEquals(Status.CREATED.getStatusCode(), response.getStatus());
+            registeredClientId = response.asJson().get("client_id").asText();
+        }
+
+        realm.cleanup().add(r -> {
+            ClientResource clientResource = AdminApiUtil.findClientByClientId(r, registeredClientId);
+            if (clientResource != null) {
+                clientResource.remove();
+            }
+        });
+        Assertions.assertNotNull(registeredClientId);
+    }
+
+    @Test
+    public void testDPoPDynamicClientRegistrationFailures() throws Exception {
+        KeyPair keyPair = KeyUtils.generateRsaKeyPair(2048);
+        AccessTokenResponse tokenResponse = getDPoPBindAccessTokenForAdmin(keyPair);
+
+        String registrationUrl = getOidcClientRegistrationUrl();
+
+        OIDCClientRepresentation clientRep = new OIDCClientRepresentation();
+        clientRep.setClientName(generateSuffixedName("dpop-dcr-client"));
+        clientRep.setClientUri(keycloakUrls.getBase());
+        clientRep.setRedirectUris(Collections.singletonList(oauth.getRedirectUri()));
+
+        // DPoP bound access token sent with the "Bearer" scheme is rejected
+        String dpopProof = generateDPoPProofForUrl(HttpMethod.POST, registrationUrl, keyPair, tokenResponse.getAccessToken());
+        int status = simpleHttp.doPost(registrationUrl)
+                .header(HttpHeaders.AUTHORIZATION, TokenUtil.TOKEN_TYPE_BEARER + " " + tokenResponse.getAccessToken())
+                .header(DPOP_HTTP_HEADER, dpopProof)
+                .json(clientRep)
+                .asStatus();
+        assertEquals(Status.UNAUTHORIZED.getStatusCode(), status);
+
+        // DPoP bound access token sent without any DPoP proof is rejected
+        status = simpleHttp.doPost(registrationUrl)
+                .header(HttpHeaders.AUTHORIZATION, DPOP_SCHEME + " " + tokenResponse.getAccessToken())
+                .json(clientRep)
+                .asStatus();
+        assertEquals(Status.UNAUTHORIZED.getStatusCode(), status);
+
+        // DPoP proof issued for a different URL is rejected
+        String wrongUrlProof = generateDPoPProofForUrl(HttpMethod.POST, oauth.getEndpoints().getUserInfo(), keyPair, tokenResponse.getAccessToken());
+        status = simpleHttp.doPost(registrationUrl)
+                .header(HttpHeaders.AUTHORIZATION, DPOP_SCHEME + " " + tokenResponse.getAccessToken())
+                .header(DPOP_HTTP_HEADER, wrongUrlProof)
+                .json(clientRep)
+                .asStatus();
+        assertEquals(Status.UNAUTHORIZED.getStatusCode(), status);
+
+        // DPoP proof signed by a different key than the one the access token is bound to is rejected
+        KeyPair otherKeyPair = KeyUtils.generateRsaKeyPair(2048);
+        String otherKeyProof = generateDPoPProofForUrl(HttpMethod.POST, registrationUrl, otherKeyPair, tokenResponse.getAccessToken());
+        status = simpleHttp.doPost(registrationUrl)
+                .header(HttpHeaders.AUTHORIZATION, DPOP_SCHEME + " " + tokenResponse.getAccessToken())
+                .header(DPOP_HTTP_HEADER, otherKeyProof)
+                .json(clientRep)
+                .asStatus();
+        assertEquals(Status.UNAUTHORIZED.getStatusCode(), status);
+    }
+
+    @Test
     public void testDPoPTokenExchange() throws Exception {
         ProtocolMapperRepresentation audMapper = new ProtocolMapperRepresentation();
         audMapper.setName("dpop-test-audience-mapper");
@@ -1514,6 +1594,35 @@ public class DPoPTest {
 
     private String getAccountRootUrl() {
         return keycloakUrls.getBase() + "/realms/" + realm.getName() + "/account";
+    }
+
+    private String getOidcClientRegistrationUrl() {
+        return keycloakUrls.getBase() + "/realms/" + realm.getName() + "/clients-registrations/openid-connect";
+    }
+
+    private String generateDPoPProofForUrl(String method, String url, KeyPair keyPair, String accessToken) throws Exception {
+        JWK jwk = createRsaJwk(keyPair.getPublic());
+        JWSHeader header = new JWSHeader(org.keycloak.jose.jws.Algorithm.PS256, DPOP_JWT_HEADER_TYPE, jwk.getKeyId(), jwk);
+        return generateSignedDPoPProof(UUID.randomUUID().toString(), method, url, Time.currentTimeSeconds(), Algorithm.PS256,
+                header, keyPair.getPrivate(), accessToken);
+    }
+
+    /**
+     * Obtains a DPoP bound access token for the realm admin user, which has the permissions needed by the dynamic
+     * client registration endpoint.
+     */
+    private AccessTokenResponse getDPoPBindAccessTokenForAdmin(KeyPair keyPair) throws Exception {
+        realm.updateClientWithCleanup(TEST_CONFIDENTIAL_CLIENT_ID, c -> c
+                .directAccessGrantsEnabled(true)
+                .attribute(OIDCConfigAttributes.DPOP_BOUND_ACCESS_TOKENS, Boolean.TRUE.toString()));
+
+        oauth.client(TEST_CONFIDENTIAL_CLIENT_ID, TEST_CONFIDENTIAL_CLIENT_SECRET);
+        String tokenProof = generateDPoPProofForUrl(HttpMethod.POST, oauth.getEndpoints().getToken(), keyPair, null);
+
+        AccessTokenResponse response = oauth.passwordGrantRequest("test-admin@localhost", "password").dpopProof(tokenProof).send();
+        assertEquals(Status.OK.getStatusCode(), response.getStatusCode());
+        assertEquals(TokenUtil.TOKEN_TYPE_DPOP, response.getTokenType());
+        return response;
     }
 
     private Map<String, String> getTokenEndpointPreflightResponseHeaders(OAuthClient oAuthClient) {

@@ -122,7 +122,10 @@ public class BackchannelAuthenticationCallbackEndpoint extends AbstractCibaEndpo
                     .checkActive(true)
                     .audience(Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName()));
 
-            TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(tokenVerifier, session, realm, session.getContext().getUri());
+            // The token is presented by the authentication channel, not by the client, which the token was issued for.
+            // Hence checks of sender-constrained tokens (DPoP, mTLS) do not apply here
+            TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(tokenVerifier, session, realm,
+                    session.getContext().getUri(), rawBearerToken, TokenVerifierProvider.CallingContext.TOKEN_INSPECTION);
             new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
 
             bearerToken =  tokenVerifier.verify().getToken();

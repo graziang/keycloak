@@ -213,6 +213,38 @@ String saUserId = clientResource.toRepresentation().getServiceAccountUserId();
 The `getServiceAccountUser()` method has also been removed from the Java and JavaScript admin client libraries.
 If you need the full user representation for the service account, use the user ID from the client representation to fetch it via the Users API.
 
+=== Sender-constrained access tokens are validated on all endpoints that accept them as a credential
+// https://github.com/keycloak/keycloak/issues/54277
+
+DPoP bound access tokens (RFC 9449) and OAuth 2.0 mutual TLS certificate bound access tokens (RFC 8705) are now verified
+on every {project_name} endpoint that accepts an access token as the credential authorizing the request, instead of only
+on a few endpoints. The affected endpoints include the Admin REST API, the Account REST API, the Dynamic Client
+Registration endpoint, the Authorization Services (UMA) endpoints and the UserInfo endpoint.
+
+Previously, mutual TLS certificate bound access tokens were only validated on the UserInfo endpoint, on token refresh and
+on logout, so a stolen certificate bound access token could be replayed on the other endpoints without the corresponding
+client certificate. After upgrading, a request carrying such a token is rejected with `401` unless the same client
+certificate used when the token was issued is presented on the TLS connection. If you enabled
+*OAuth 2.0 Mutual TLS Certificate Bound Access Tokens Enabled* on a client whose tokens are used against those endpoints,
+make sure the client certificate is presented on those calls, and that any reverse proxy in front of {project_name}
+forwards it.
+
+For the same reason, a request to the Dynamic Client Registration endpoint, which is authorized by an access token of a
+client that has *OAuth 2.0 DPoP bound access tokens Enabled*, now requires a valid DPoP proof. In exchange, the endpoint
+no longer rejects DPoP bound access tokens: previously it only accepted the `Bearer` authorization scheme, so a DPoP
+bound token could not be used there at all. The `DPoP` authorization scheme is now accepted and the proof is verified.
+
+The binding is intentionally not verified when the token is not the credential of the caller, which means when it is sent
+as a request parameter and inspected on behalf of a separately authenticated party. This is the case for the Token
+Introspection endpoint and the CIBA authentication channel callback endpoint. Token exchange keeps its own, stricter,
+rules for sender-constrained subject tokens.
+
+Internally, these checks are now implemented as `TokenVerifierProvider` implementations instead of being added manually
+to each endpoint. The `TokenVerifierProvider.TokenVerifierProviderContext` record, which is part of an internal SPI,
+gained two components: `rawAccessToken` and `callingContext`. Custom implementations of the SPI that construct the record
+with the previous four arguments keep working through a compatibility constructor, which defaults `callingContext` to
+`REQUEST_AUTHORIZATION`.
+
 // ------------------------ Notable changes ------------------------ //
 == Notable changes
 

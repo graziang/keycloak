@@ -52,6 +52,7 @@ import org.keycloak.protocol.oidc.endpoints.TokenEndpoint;
 import org.keycloak.protocol.saml.SamlClient;
 import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.protocol.saml.SamlService;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.saml.common.constants.GeneralConstants;
@@ -116,8 +117,9 @@ public class V1TokenExchangeProvider extends AbstractTokenExchangeProvider {
 
             }
 
+            // Token exchange has its own rules for sender-constrained tokens
             AuthenticationManager.AuthResult authResult = AuthenticationManager.verifyIdentityToken(session, realm, session.getContext().getUri(), clientConnection, true, true, null,
-                    false, subjectToken, context.getHeaders(), verifier -> {});
+                    false, subjectToken, context.getHeaders(), TokenVerifierProvider.CallingContext.TOKEN_EXCHANGE, verifier -> {});
             if (authResult == null) {
                 event.detail(Details.REASON, "subject_token validation failure");
                 event.error(Errors.INVALID_TOKEN);

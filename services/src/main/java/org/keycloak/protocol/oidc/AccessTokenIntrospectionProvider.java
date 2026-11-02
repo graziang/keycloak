@@ -319,7 +319,10 @@ public class AccessTokenIntrospectionProvider<T extends AccessToken> implements 
 
     // Note: This might be possibly removed once option for skip-audience-check for introspection is removed from client and server options
     protected void addAdditionalVerifications(TokenVerifier<T> verifier) {
-        TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext((TokenVerifier<AccessToken>) verifier, session, realm, session.getContext().getUri());
+        // The introspecting client is not required to be the holder of the token, so checks of sender-constrained
+        // tokens (DPoP, mTLS) do not apply here
+        TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext((TokenVerifier<AccessToken>) verifier, session, realm,
+                session.getContext().getUri(), null, TokenVerifierProvider.CallingContext.TOKEN_INSPECTION);
         new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
     }
 

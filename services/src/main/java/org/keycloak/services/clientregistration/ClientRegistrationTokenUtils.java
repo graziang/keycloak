@@ -23,6 +23,7 @@ import java.util.Set;
 
 import org.keycloak.TokenCategory;
 import org.keycloak.TokenVerifier;
+import org.keycloak.common.Profile;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.crypto.CryptoUtils;
@@ -101,8 +102,12 @@ public class ClientRegistrationTokenUtils {
             TokenVerifier<AccessToken> verifier = TokenVerifier.create(token, AccessToken.class)
                     .withChecks(new TokenVerifier.RealmUrlCheck(getIssuer(session, realm)), TokenVerifier.IS_ACTIVE, new TokenRevocationCheck(session));
 
-            if (TokenUtil.TOKEN_TYPE_BEARER.equals(verifier.getToken().getType())) {
-                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, session.getContext().getUri());
+            // Additional verifications, including the checks of sender-constrained access tokens (DPoP, mTLS), are
+            // relevant just for the access tokens. Initial access tokens and registration access tokens are
+            // Keycloak internal tokens with their own validation rules below.
+            if (isAccessToken(verifier.getToken().getType())) {
+                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm,
+                        session.getContext().getUri(), token, TokenVerifierProvider.CallingContext.REQUEST_AUTHORIZATION);
                 new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
             }
 
@@ -118,13 +123,25 @@ public class ClientRegistrationTokenUtils {
             return TokenVerification.error(new RuntimeException("Failed decode token", e));
         }
 
-        if (!(TokenUtil.TOKEN_TYPE_BEARER.equals(jwt.getType()) ||
+        if (!(isAccessToken(jwt.getType()) ||
                 TYPE_INITIAL_ACCESS_TOKEN.equals(jwt.getType()) ||
                 TYPE_REGISTRATION_ACCESS_TOKEN.equals(jwt.getType()))) {
             return TokenVerification.error(new RuntimeException("Invalid type of token"));
         }
 
         return TokenVerification.success(kid, jwt);
+    }
+
+    /**
+     * @return true if the given token type is the type of a regular OAuth 2.0 access token, which can be used to
+     * authorize the client registration request. Both plain bearer tokens and DPoP bound access tokens (RFC 9449)
+     * are accepted. The DPoP proof itself is validated by the registered {@link TokenVerifierProvider}s.
+     */
+    public static boolean isAccessToken(String tokenType) {
+        if (TokenUtil.TOKEN_TYPE_BEARER.equals(tokenType)) {
+            return true;
+        }
+        return Profile.isFeatureEnabled(Profile.Feature.DPOP) && TokenUtil.TOKEN_TYPE_DPOP.equals(tokenType);
     }
 
     private static String setupToken(JsonWebToken jwt, KeycloakSession session, RealmModel realm, String id, String type, long expiration, List<String> webOrigins) {

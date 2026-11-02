@@ -79,9 +79,7 @@ import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.clientpolicy.context.UserInfoRequestContext;
 import org.keycloak.services.cors.Cors;
 import org.keycloak.services.managers.AppAuthManager;
-import org.keycloak.services.util.DPoPUtil;
 import org.keycloak.services.util.DefaultClientSessionContext;
-import org.keycloak.services.util.MtlsHoKTokenUtil;
 import org.keycloak.services.util.UserSessionUtil;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.util.TokenUtil;
@@ -193,10 +191,11 @@ public class UserInfoEndpoint {
             TokenVerifier<AccessToken> verifier = TokenVerifier.create(tokenForUserInfo.getToken(), AccessToken.class).withDefaultChecks()
                     .realmUrl(Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName()));
 
-            TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier , session, realm, session.getContext().getUri());
+            // Verifications of sender-constrained access tokens (DPoP, mTLS) are added by the corresponding
+            // TokenVerifierProvider implementations
+            TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm,
+                    session.getContext().getUri(), tokenForUserInfo.getToken(), TokenVerifierProvider.CallingContext.REQUEST_AUTHORIZATION);
             new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
-            
-            verifier = DPoPUtil.withDPoPVerifier(verifier, realm, new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).accessToken(tokenForUserInfo.getToken()));
 
             JWSHeader header = verifier.getHeader();
             Algorithm algorithm = header.getAlgorithm();
@@ -277,16 +276,6 @@ public class UserInfoEndpoint {
         if (!TokenManager.validateUserNotBefore(session, realm, token, userModel)) {
             event.error(Errors.INVALID_USER);
             throw error.invalidToken("User not valid");
-        }
-
-        // KEYCLOAK-6771 Certificate Bound Token
-        // https://tools.ietf.org/html/draft-ietf-oauth-mtls-08#section-3
-        if (OIDCAdvancedConfigWrapper.fromClientModel(clientModel).isUseMtlsHokToken()) {
-            if (!MtlsHoKTokenUtil.verifyTokenBindingWithClientCertificate(token, request, session)) {
-                event.detail(Details.REASON, MtlsHoKTokenUtil.CERT_VERIFY_ERROR_DESC);
-                event.error(Errors.NOT_ALLOWED);
-                throw error.invalidToken(MtlsHoKTokenUtil.CERT_VERIFY_ERROR_DESC);
-            }
         }
 
         // Check for lightweight access token

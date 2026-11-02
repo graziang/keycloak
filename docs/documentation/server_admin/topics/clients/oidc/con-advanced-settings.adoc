@@ -87,8 +87,14 @@ If verification fails, {project_name} rejects the token.
 In the following cases, {project_name} will verify the client sending the access token or the refresh token:
 
 * A token refresh request is sent to the token endpoint with a holder-of-key refresh token.
-* A UserInfo request is sent to UserInfo endpoint with a holder-of-key access token.
 * A logout request is sent to non-OIDC compliant {project_name} proprietary Logout endpoint with a holder-of-key refresh token.
+* A holder-of-key access token is used as the credential authorizing a request to a {project_name} endpoint. This includes
+the UserInfo endpoint, the Admin REST API, the Account REST API, the Dynamic Client Registration endpoint and the
+Authorization Services (UMA) endpoints.
+
+The binding is not verified when the token is not used as the credential of the caller, which means when it is sent as a
+request parameter and inspected on behalf of a separately authenticated party. This is the case for the Token
+Introspection endpoint and for the CIBA authentication channel callback endpoint. Token exchange applies its own rules.
 
 See https://datatracker.ietf.org/doc/rfc8705/[Mutual TLS Client Certificate Bound Access Tokens] in the OAuth 2.0 Mutual TLS Client Authentication and Certificate Bound Access Tokens for more details.
 

@@ -29,7 +29,6 @@ import org.keycloak.http.HttpRequest;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.util.DPoPUtil;
 
 import org.jboss.logging.Logger;
 
@@ -196,10 +195,10 @@ public class AppAuthManager extends AuthenticationManager {
             if (tokenString == null) tokenString = extractAuthorizationHeaderToken(headers);
             // audience can be null
 
+            // Verifications of sender-constrained access tokens (DPoP, mTLS) are added by the corresponding
+            // TokenVerifierProvider implementations
             return verifyIdentityToken(session, realm, uriInfo, connection, true, true, audience, false, tokenString, headers,
-                    verifier -> {
-                        DPoPUtil.withDPoPVerifier(verifier, realm, new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).accessToken(tokenString));
-                    });
+                    verifier -> {});
         }
     }
 

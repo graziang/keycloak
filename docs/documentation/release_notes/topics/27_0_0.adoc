@@ -9,6 +9,13 @@ See the upgrading guide for migration details.
 
 = Security and Standards
 
+== Sender-constrained access tokens validated on all endpoints that accept them as a credential
+
+DPoP bound access tokens and OAuth 2.0 mutual TLS certificate bound access tokens are now validated on every {project_name} endpoint that accepts an access token as the credential authorizing the request, including the Admin REST API, the Account REST API, the Dynamic Client Registration endpoint and the Authorization Services endpoints.
+Previously, certificate bound tokens were verified only on the UserInfo endpoint, on token refresh and on logout, so such a token could be replayed elsewhere without the client certificate it was bound to.
+The Dynamic Client Registration endpoint also accepts the `DPoP` authorization scheme now, which it rejected before.
+See the upgrading guide for details.
+
 == SAML OneTimeUse condition enforced for identity brokering
 
 When an external SAML identity provider issues an assertion with a `OneTimeUse` condition, {project_name} now rejects any later attempt to present the same assertion, as required by the SAML 2.0 specification.

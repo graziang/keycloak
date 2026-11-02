@@ -24,13 +24,11 @@ import java.util.Optional;
 import java.util.Set;
 
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 
 import org.keycloak.Config;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.AuthenticationProcessor;
-import org.keycloak.common.util.ObjectUtil;
 import org.keycloak.common.util.Time;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
@@ -53,9 +51,9 @@ import org.keycloak.services.clientpolicy.context.DynamicClientViewContext;
 import org.keycloak.services.clientregistration.policy.ClientRegistrationPolicyException;
 import org.keycloak.services.clientregistration.policy.ClientRegistrationPolicyManager;
 import org.keycloak.services.clientregistration.policy.RegistrationAuth;
+import org.keycloak.services.managers.AppAuthManager;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.util.UserSessionUtil;
-import org.keycloak.util.TokenUtil;
 
 import static org.keycloak.models.utils.KeycloakModelUtils.removeTransientAdminRoles;
 
@@ -90,29 +88,14 @@ public class ClientRegistrationAuth {
         initialized = true;
         realm = session.getContext().getRealm();
 
-        String authorizationHeader = session.getContext().getRequestHeaders().getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authorizationHeader == null) {
+        // Accepts both the "Bearer" and the "DPoP" authorization scheme. The DPoP proof of a DPoP bound access token
+        // is validated by the registered TokenVerifierProvider implementations during the token verification below.
+        AppAuthManager.AuthHeader authHeader = AppAuthManager.extractAuthorizationHeaderTokenOrReturnNull(session.getContext().getRequestHeaders());
+        if (authHeader == null) {
             return;
         }
 
-        int indexOfSpace = authorizationHeader.indexOf(' ');
-
-        if (indexOfSpace <= 0) {
-            return;
-        }
-
-        String typeString = authorizationHeader.substring(0, indexOfSpace);
-        String tokenString = authorizationHeader.substring(indexOfSpace + 1);
-
-        if (!typeString.equalsIgnoreCase(TokenUtil.TOKEN_TYPE_BEARER)) {
-            return;
-        }
-
-        if (ObjectUtil.isBlank(tokenString) || tokenString.contains(" ")) {
-            return;
-        }
-
-        token = tokenString;
+        token = authHeader.getToken();
 
         ClientRegistrationTokenUtils.TokenVerification tokenVerification = ClientRegistrationTokenUtils.verifyToken(session, realm, token);
         if (tokenVerification.getError() != null) {
@@ -141,8 +124,12 @@ public class ClientRegistrationAuth {
         return jwt;
     }
 
-    boolean isBearerToken() {
-        return jwt != null && TokenUtil.TOKEN_TYPE_BEARER.equals(jwt.getType());
+    /**
+     * @return true if the request is authorized by a regular OAuth 2.0 access token (either a plain bearer token or a
+     * DPoP bound access token) rather than by an initial access token or a registration access token.
+     */
+    boolean isAccessToken() {
+        return jwt != null && ClientRegistrationTokenUtils.isAccessToken(jwt.getType());
     }
 
     public boolean isInitialAccessToken() {
@@ -154,7 +141,7 @@ public class ClientRegistrationAuth {
     }
 
     public boolean isViewOnly() {
-        return isBearerToken()
+        return isAccessToken()
                 && hasRole(AdminRoles.VIEW_CLIENTS)
                 && !hasRole(AdminRoles.MANAGE_CLIENTS);
     }
@@ -164,7 +151,7 @@ public class ClientRegistrationAuth {
 
         RegistrationAuth registrationAuth = RegistrationAuth.ANONYMOUS;
 
-        if (isBearerToken()) {
+        if (isAccessToken()) {
 
             if (hasRole(AdminRoles.MANAGE_CLIENTS, AdminRoles.CREATE_CLIENT)) {
                 registrationAuth = RegistrationAuth.AUTHENTICATED;
@@ -209,7 +196,7 @@ public class ClientRegistrationAuth {
 
         init();
 
-        if (isBearerToken()) {
+        if (isAccessToken()) {
             checkClientProtocol();
 
             if (hasRole(AdminRoles.MANAGE_CLIENTS, AdminRoles.VIEW_CLIENTS)) {
@@ -322,7 +309,7 @@ public class ClientRegistrationAuth {
     private RegistrationAuth requireUpdateAuth(ClientModel client) {
         init();
 
-        if (isBearerToken()) {
+        if (isAccessToken()) {
             checkClientProtocol();
 
             if (hasRole(AdminRoles.MANAGE_CLIENTS)) {
@@ -354,7 +341,7 @@ public class ClientRegistrationAuth {
 
             if (!lightweight) {
                 // For lightweight access token, the roles are already considered just for those, which are present on UserModel
-                if (isBearerToken()) {
+                if (isAccessToken()) {
                     String clientId = getMgmtClientId();
                     AccessToken.Access mgmtClientAccess = jwt.getResourceAccess(clientId);
                     if (mgmtClientAccess != null) {
