@@ -251,40 +251,34 @@ public class DPoPUtil {
 
     private static final Pattern WHITESPACES = Pattern.compile("\\s+");
 
-    public static TokenVerifier<AccessToken> withDPoPVerifier(TokenVerifier<AccessToken> verifier, RealmModel realm, DPoPUtil.Validator validator) {
-        if (Profile.isFeatureEnabled(Profile.Feature.DPOP)) {
-            verifier = verifier.tokenType(List.of(TokenUtil.TOKEN_TYPE_BEARER, TokenUtil.TOKEN_TYPE_DPOP))
-                    .withChecks(token -> {
-                        boolean isSchemeDPoP = false;
-                        if (StringUtil.isNotBlank(validator.authHeader)) {
-                            String[] split = WHITESPACES.split(validator.authHeader);
-                            isSchemeDPoP = TokenUtil.TOKEN_TYPE_DPOP.equalsIgnoreCase(split[0]);
-                        }
-
-                        if (!isSchemeDPoP && DPoPUtil.DPOP_TOKEN_TYPE.equalsIgnoreCase(token.getType())) {
-                            throw new VerificationException("The access token type is DPoP but Authorization Header is not DPoP");
-                        }
-                        if (isSchemeDPoP && !DPoPUtil.DPOP_TOKEN_TYPE.equalsIgnoreCase(token.getType())) {
-                            throw new VerificationException("The access token type is not DPoP but Authorization Header is DPoP");
-                        }
-                        ClientModel clientModel = realm.getClientByClientId(token.getIssuedFor());
-                        if (clientModel == null) {
-                            throw new VerificationException("Client not found");
-                        }
-                        if (OIDCAdvancedConfigWrapper.fromClientModel(clientModel).isUseDPoP() && !isSchemeDPoP) {
-                            throw new VerificationException("This client requires DPoP, but no DPoP Authorization header is present");
-                        }
-                        if (isSchemeDPoP) {
-                            if (validator.accessToken == null) {
-                                throw new VerificationException("Access Token not set for validator");
-                            }
-                            DPoP dPoP = validator.validate();
-                            DPoPUtil.validateBinding(token, dPoP);
-                        }
-                        return true;
-                    });
+    public static void verifyResourceTokenBinding(AccessToken token, RealmModel realm, DPoPUtil.Validator validator) throws VerificationException {
+        boolean isDPoPToken = DPoPUtil.DPOP_TOKEN_TYPE.equalsIgnoreCase(token.getType());
+        boolean isSchemeDPoP = false;
+        if (StringUtil.isNotBlank(validator.authHeader)) {
+            String[] split = WHITESPACES.split(validator.authHeader);
+            isSchemeDPoP = TokenUtil.TOKEN_TYPE_DPOP.equalsIgnoreCase(split[0]);
         }
-        return verifier;
+
+        if (!validator.tokenInFormParameter && !isSchemeDPoP && isDPoPToken) {
+            throw new VerificationException("The access token type is DPoP but Authorization Header is not DPoP");
+        }
+        if (!validator.tokenInFormParameter && isSchemeDPoP && !isDPoPToken) {
+            throw new VerificationException("The access token type is not DPoP but Authorization Header is DPoP");
+        }
+        ClientModel clientModel = realm.getClientByClientId(token.getIssuedFor());
+        if (clientModel == null) {
+            throw new VerificationException("Client not found");
+        }
+        if (OIDCAdvancedConfigWrapper.fromClientModel(clientModel).isUseDPoP() && !isDPoPToken) {
+            throw new VerificationException("This client requires a DPoP-bound access token");
+        }
+        if (isDPoPToken) {
+            if (validator.accessToken == null) {
+                throw new VerificationException("Access Token not set for validator");
+            }
+            DPoP dPoP = validator.validate();
+            DPoPUtil.validateBinding(token, dPoP);
+        }
     }
 
     public static void validateBinding(AccessToken token, DPoP dPoP) throws VerificationException {
@@ -512,6 +506,9 @@ public class DPoPUtil {
 
     }
 
+    private record ValidatedProof(String encodedProof, URI uri, String method, DPoP proof) {
+    }
+
     public static class Validator {
 
         private URI uri;
@@ -519,6 +516,7 @@ public class DPoPUtil {
         private String dPoP;
         private String accessToken;
         private String authHeader;
+        private boolean tokenInFormParameter;
         private int clockSkew = DEFAULT_ALLOWED_CLOCK_SKEW;
         private int lifetime = DEFAULT_PROOF_LIFETIME;
 
@@ -546,6 +544,11 @@ public class DPoPUtil {
             return this;
         }
 
+        public Validator tokenInFormParameter(boolean tokenInFormParameter) {
+            this.tokenInFormParameter = tokenInFormParameter;
+            return this;
+        }
+
         public Validator uriInfo(UriInfo uriInfo) {
             this.uri = uriInfo.getAbsolutePath();
             return this;
@@ -562,7 +565,18 @@ public class DPoPUtil {
         }
 
         public DPoP validate() throws VerificationException {
-            return validateDPoP(session, uri, method, dPoP, accessToken, lifetime, clockSkew);
+            ValidatedProof validated = session.getAttribute(ValidatedProof.class.getName(), ValidatedProof.class);
+            if (validated != null && validated.encodedProof().equals(dPoP) && validated.uri().equals(uri) && validated.method().equals(method)) {
+                if (accessToken != null) {
+                    new DPoPAccessTokenHashCheck(accessToken).test(validated.proof());
+                }
+                return validated.proof();
+            }
+
+            DPoP proof = validateDPoP(session, uri, method, dPoP, accessToken, lifetime, clockSkew);
+            // A request can verify multiple tokens, but its proof must only enter the replay cache once.
+            session.setAttribute(ValidatedProof.class.getName(), new ValidatedProof(dPoP, uri, method, proof));
+            return proof;
         }
 
     }

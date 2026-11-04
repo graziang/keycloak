@@ -29,7 +29,7 @@ import org.keycloak.http.HttpRequest;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.util.DPoPUtil;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.TokenVerificationContext;
 
 import org.jboss.logging.Logger;
 
@@ -141,6 +141,7 @@ public class AppAuthManager extends AuthenticationManager {
         private HttpRequest request;
         private String tokenString;
         private String audience;
+        private TokenVerificationContext verificationContext = TokenVerificationContext.RESOURCE;
 
         public BearerTokenAuthenticator(KeycloakSession session) {
             this.session = session;
@@ -186,6 +187,11 @@ public class AppAuthManager extends AuthenticationManager {
             return this;
         }
 
+        public BearerTokenAuthenticator setVerificationContext(TokenVerificationContext verificationContext) {
+            this.verificationContext = verificationContext;
+            return this;
+        }
+
         public AuthResult authenticate() {
             KeycloakContext ctx = session.getContext();
             if (realm == null) realm = ctx.getRealm();
@@ -197,9 +203,7 @@ public class AppAuthManager extends AuthenticationManager {
             // audience can be null
 
             return verifyIdentityToken(session, realm, uriInfo, connection, true, true, audience, false, tokenString, headers,
-                    verifier -> {
-                        DPoPUtil.withDPoPVerifier(verifier, realm, new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).accessToken(tokenString));
-                    });
+                    verifier -> {}, verificationContext, request);
         }
     }
 

@@ -23,6 +23,7 @@ import java.util.Set;
 
 import org.keycloak.TokenCategory;
 import org.keycloak.TokenVerifier;
+import org.keycloak.common.Profile;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.crypto.CryptoUtils;
@@ -101,8 +102,8 @@ public class ClientRegistrationTokenUtils {
             TokenVerifier<AccessToken> verifier = TokenVerifier.create(token, AccessToken.class)
                     .withChecks(new TokenVerifier.RealmUrlCheck(getIssuer(session, realm)), TokenVerifier.IS_ACTIVE, new TokenRevocationCheck(session));
 
-            if (TokenUtil.TOKEN_TYPE_BEARER.equals(verifier.getToken().getType())) {
-                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, session.getContext().getUri());
+            if (isAccessToken(verifier.getToken())) {
+                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, session.getContext().getUri(), token, TokenVerifierProvider.TokenVerificationContext.RESOURCE);
                 new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
             }
 
@@ -118,13 +119,19 @@ public class ClientRegistrationTokenUtils {
             return TokenVerification.error(new RuntimeException("Failed decode token", e));
         }
 
-        if (!(TokenUtil.TOKEN_TYPE_BEARER.equals(jwt.getType()) ||
+        if (!(isAccessToken(jwt) ||
                 TYPE_INITIAL_ACCESS_TOKEN.equals(jwt.getType()) ||
                 TYPE_REGISTRATION_ACCESS_TOKEN.equals(jwt.getType()))) {
             return TokenVerification.error(new RuntimeException("Invalid type of token"));
         }
 
         return TokenVerification.success(kid, jwt);
+    }
+
+    /** Identifies OAuth access tokens, excluding initial and registration access tokens. */
+    public static boolean isAccessToken(JsonWebToken token) {
+        return TokenUtil.TOKEN_TYPE_BEARER.equals(token.getType()) ||
+                (Profile.isFeatureEnabled(Profile.Feature.DPOP) && TokenUtil.TOKEN_TYPE_DPOP.equals(token.getType()));
     }
 
     private static String setupToken(JsonWebToken jwt, KeycloakSession session, RealmModel realm, String id, String type, long expiration, List<String> webOrigins) {

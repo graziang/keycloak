@@ -49,6 +49,7 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.TokenExchangeContext;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.endpoints.TokenEndpoint;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
 import org.keycloak.protocol.saml.SamlClient;
 import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.protocol.saml.SamlService;
@@ -117,7 +118,7 @@ public class V1TokenExchangeProvider extends AbstractTokenExchangeProvider {
             }
 
             AuthenticationManager.AuthResult authResult = AuthenticationManager.verifyIdentityToken(session, realm, session.getContext().getUri(), clientConnection, true, true, null,
-                    false, subjectToken, context.getHeaders(), verifier -> {});
+                    false, subjectToken, context.getHeaders(), verifier -> {}, TokenVerifierProvider.TokenVerificationContext.TOKEN_EXCHANGE);
             if (authResult == null) {
                 event.detail(Details.REASON, "subject_token validation failure");
                 event.error(Errors.INVALID_TOKEN);
@@ -127,6 +128,12 @@ public class V1TokenExchangeProvider extends AbstractTokenExchangeProvider {
             tokenUser = authResult.user();
             tokenSession = authResult.session();
             token = authResult.token();
+            if (token.getConfirmation() != null) {
+                event.detail(Details.REASON, "Sender-constrained tokens are not supported by legacy token exchange");
+                event.error(Errors.INVALID_TOKEN);
+                throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
+                        "Sender-constrained tokens are not supported by legacy token exchange", Response.Status.BAD_REQUEST);
+            }
         }
 
         String requestedSubject = context.getFormParams().getFirst(OAuth2Constants.REQUESTED_SUBJECT);

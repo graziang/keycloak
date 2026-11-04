@@ -122,7 +122,7 @@ public class BackchannelAuthenticationCallbackEndpoint extends AbstractCibaEndpo
                     .checkActive(true)
                     .audience(Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName()));
 
-            TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(tokenVerifier, session, realm, session.getContext().getUri());
+            TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(tokenVerifier, session, realm, session.getContext().getUri(), rawBearerToken, TokenVerifierProvider.TokenVerificationContext.CIBA_CALLBACK);
             new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
 
             bearerToken =  tokenVerifier.verify().getToken();

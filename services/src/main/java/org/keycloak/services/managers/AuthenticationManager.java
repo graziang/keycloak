@@ -1554,6 +1554,20 @@ public class AuthenticationManager {
 
     public static AuthResult verifyIdentityToken(KeycloakSession session, RealmModel realm, UriInfo uriInfo, ClientConnection connection, boolean checkActive, boolean checkTokenType,
                                                  String checkAudience, boolean isCookie, String tokenString, HttpHeaders headers, Consumer<TokenVerifier<AccessToken>> verifierConsumer) {
+        return verifyIdentityToken(session, realm, uriInfo, connection, checkActive, checkTokenType, checkAudience, isCookie,
+                tokenString, headers, verifierConsumer, TokenVerifierProvider.TokenVerificationContext.RESOURCE);
+    }
+
+    public static AuthResult verifyIdentityToken(KeycloakSession session, RealmModel realm, UriInfo uriInfo, ClientConnection connection, boolean checkActive, boolean checkTokenType,
+                                                 String checkAudience, boolean isCookie, String tokenString, HttpHeaders headers, Consumer<TokenVerifier<AccessToken>> verifierConsumer,
+                                                 TokenVerifierProvider.TokenVerificationContext verificationContext) {
+        return verifyIdentityToken(session, realm, uriInfo, connection, checkActive, checkTokenType, checkAudience, isCookie,
+                tokenString, headers, verifierConsumer, verificationContext, session.getContext().getHttpRequest());
+    }
+
+    public static AuthResult verifyIdentityToken(KeycloakSession session, RealmModel realm, UriInfo uriInfo, ClientConnection connection, boolean checkActive, boolean checkTokenType,
+                                                 String checkAudience, boolean isCookie, String tokenString, HttpHeaders headers, Consumer<TokenVerifier<AccessToken>> verifierConsumer,
+                                                 TokenVerifierProvider.TokenVerificationContext verificationContext, HttpRequest request) {
         try {
             TokenVerifier<AccessToken> verifier = TokenVerifier.create(tokenString, AccessToken.class)
               .withDefaultChecks()
@@ -1571,7 +1585,7 @@ public class AuthenticationManager {
             if (checkTokenType) {
                 verifier.withChecks(new TokenManager.TokenRevocationCheck(session));
 
-                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, uriInfo);
+                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, uriInfo, tokenString, verificationContext, request);
                 new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
             }
 
