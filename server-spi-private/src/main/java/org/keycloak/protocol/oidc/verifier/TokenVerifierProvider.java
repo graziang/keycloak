@@ -1,30 +1,29 @@
 package org.keycloak.protocol.oidc.verifier;
 
-import jakarta.ws.rs.core.UriInfo;
-
 import org.keycloak.TokenVerifier;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
+import org.keycloak.common.VerificationException;
 import org.keycloak.provider.Provider;
 import org.keycloak.representations.AccessToken;
 
 /**
- * Provider allows to inject custom token verifiers, which will be used during verifications of Keycloak tokens (EG. during admin REST or account REST calls)
+ * Additional token restrictions and sender binding verification for Keycloak endpoints.
  */
 public interface TokenVerifierProvider extends Provider {
 
     /**
-     * Additional verifications of access token provided by this provider
-     *
-     * @param context for the token verification
+     * Adds checks to run during token validation, without consuming the proof of possession.
+     * Providers that only verify sender bindings can leave the implementation empty.
      */
-    void additionalAccessTokenVerifications(TokenVerifierProviderContext context);
+    void additionalAccessTokenVerifications(TokenVerifier<AccessToken> verifier, TokenVerificationContext context);
+
+    /**
+     * Verifies possession of the key of an already validated token. Resource requests invoke this automatically;
+     * token exchange invokes it after authorizing the requesting client. Introspection and channel credentials do not.
+     */
+    default void verifyTokenBinding(AccessToken token, TokenVerificationContext context) throws VerificationException {
+    }
 
     @Override
     default void close() {
-    }
-
-    // Add more fields if needed...
-    record TokenVerifierProviderContext(TokenVerifier<AccessToken> accessTokenVerifier, KeycloakSession session, RealmModel realm, UriInfo uriInfo) {
     }
 }

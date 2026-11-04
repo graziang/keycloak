@@ -1,7 +1,10 @@
 package org.keycloak.protocol.oid4vc.verifier;
 
+import org.keycloak.TokenVerifier;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext;
 import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
+import org.keycloak.representations.AccessToken;
 
 
 public class OID4VCITokenVerifierProvider implements TokenVerifierProvider {
@@ -14,7 +17,7 @@ public class OID4VCITokenVerifierProvider implements TokenVerifierProvider {
 
 
     @Override
-    public void additionalAccessTokenVerifications(TokenVerifierProviderContext context) {
-        context.accessTokenVerifier().withChecks(new OID4VCITokenVerifier(context));
+    public void additionalAccessTokenVerifications(TokenVerifier<AccessToken> verifier, TokenVerificationContext context) {
+        verifier.withChecks(new OID4VCITokenVerifier(context));
     }
 }

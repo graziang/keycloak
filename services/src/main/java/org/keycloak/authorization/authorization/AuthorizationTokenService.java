@@ -79,6 +79,7 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.TokenManager.AccessTokenResponseBuilder;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext.TokenUse;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AccessToken.Authorization;
 import org.keycloak.representations.IDToken;
@@ -99,6 +100,7 @@ import org.keycloak.services.util.DefaultClientSessionContext;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.util.TokenUtil;
 
 import org.jboss.logging.Logger;
 
@@ -136,8 +138,10 @@ public class AuthorizationTokenService {
             request.setClaims(claims);
 
             try {
-                return new KeycloakIdentity(authorization.getKeycloakSession(),
-                        Tokens.getAccessToken(request.getSubjectToken(), authorization.getKeycloakSession()));
+                KeycloakSession session = authorization.getKeycloakSession();
+                AccessToken token = request.verifiedAccessToken != null ? request.verifiedAccessToken
+                        : Tokens.getAccessToken(request.getSubjectToken(), session, TokenUse.PARAMETER_AUTHORIZATION);
+                return new KeycloakIdentity(session, token);
             } catch (Exception cause) {
                 fireErrorEvent(request.getEvent(), Errors.INVALID_TOKEN, cause);
                 throw new CorsErrorResponseException(request.getCors(), "unauthorized_client", "Invalid identity", Status.BAD_REQUEST);
@@ -172,6 +176,13 @@ public class AuthorizationTokenService {
             if (idToken.isExpired()) {
                 CorsErrorResponseException exception = new CorsErrorResponseException(request.getCors(), "invalid_claim_token", "Expired token", Status.BAD_REQUEST);
                 fireErrorEvent(request.getEvent(), Errors.INVALID_REQUEST, exception);
+                throw exception;
+            }
+
+            if (request.verifiedAccessToken == null && !TokenUtil.TOKEN_TYPE_ID.equals(idToken.getType())
+                    && Tokens.getAccessToken(subjectToken, keycloakSession, TokenUse.PARAMETER_AUTHORIZATION) == null) {
+                CorsErrorResponseException exception = new CorsErrorResponseException(request.getCors(), "invalid_claim_token", "Invalid access token", Status.BAD_REQUEST);
+                fireErrorEvent(request.getEvent(), Errors.INVALID_TOKEN, exception);
                 throw exception;
             }
 
@@ -810,6 +821,7 @@ public class AuthorizationTokenService {
         private final HttpRequest httpRequest;
         private final Cors cors;
         private final ClientConnection clientConnection;
+        private AccessToken verifiedAccessToken;
 
         public KeycloakAuthorizationRequest(AuthorizationProvider authorization, TokenManager tokenManager, EventBuilder event, HttpRequest request, Cors cors, ClientConnection clientConnection) {
             this.authorization = authorization;
@@ -818,6 +830,11 @@ public class AuthorizationTokenService {
             httpRequest = request;
             this.cors = cors;
             this.clientConnection = clientConnection;
+        }
+
+        /** Subject token already validated or issued by the grant in this request. */
+        public void setVerifiedAccessToken(AccessToken verifiedAccessToken) {
+            this.verifiedAccessToken = verifiedAccessToken;
         }
 
         TokenManager getTokenManager() {

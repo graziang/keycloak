@@ -4,6 +4,16 @@
 Breaking changes are identified as those that might require changes for existing users to their configurations or applications.
 In minor or patch releases, {project_name} will only introduce breaking changes to fix bugs.
 
+=== Holder-of-key access token validation
+// https://github.com/keycloak/keycloak/issues/54277
+
+{project_name} now validates mTLS certificate bindings when access tokens are used with the Admin REST, Account REST, client registration, identity brokering, Authorization Services, and credential endpoints, in addition to UserInfo.
+Applications using certificate-bound tokens must present the matching client certificate when calling these endpoints. Disabling the client's certificate-bound token setting does not remove the binding from tokens already issued.
+
+DPoP-bound access tokens are now supported for client registration and UMA permission grants. When sent in the `Authorization` header, these tokens require the `DPoP` scheme. Access tokens sent as UMA `claim_token` or `subject_token` parameters are also validated. Each request requires a valid proof containing the access token hash.
+Legacy Token Exchange rejects DPoP-bound and mTLS-bound subject tokens. Use Standard Token Exchange for supported exchanges of bound tokens.
+Token introspection continues to work without proof of possession from the token holder.
+
 === Realm-level default client scopes require `manage-realm`
 // https://github.com/keycloak/keycloak/issues/50588
 

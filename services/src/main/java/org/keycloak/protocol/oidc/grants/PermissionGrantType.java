@@ -20,7 +20,6 @@ package org.keycloak.protocol.oidc.grants;
 import java.util.List;
 import java.util.Set;
 
-import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 
 import org.keycloak.OAuth2Constants;
@@ -52,19 +51,15 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
 
         event.detail(Details.AUTH_METHOD, "oauth_credentials");
 
-        String accessTokenString = null;
-        String authorizationHeader = headers.getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        AppAuthManager.AuthHeader authHeader = AppAuthManager.extractAuthorizationHeaderTokenOrReturnNull(headers);
+        String accessTokenString = authHeader == null ? null : authHeader.getToken();
+        AccessToken verifiedAccessToken = null;
 
-        if (authorizationHeader != null && authorizationHeader.toLowerCase().startsWith("bearer")) {
-            accessTokenString = new AppAuthManager().extractAuthorizationHeaderToken(headers);
-        }
-
-        // we allow public clients to authenticate using a bearer token, where the token should be a valid access token.
-        // public clients don't have secret and should be able to obtain a RPT by providing an access token previously issued by the server
+        // Public clients can obtain an RPT using an access token instead of client credentials.
         if (accessTokenString != null) {
-            AccessToken accessToken = Tokens.getAccessToken(session);
+            verifiedAccessToken = Tokens.getAccessToken(session);
 
-            if (accessToken == null) {
+            if (verifiedAccessToken == null) {
                 // This allows SPA clients to receive CORS headers on error responses (e.g. expired tokens, disabled users)
                 AccessToken signatureVerifiedToken = session.tokens().decode(accessTokenString, AccessToken.class);
                 if (signatureVerifiedToken != null) {
@@ -76,7 +71,7 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
                 throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_GRANT, "Invalid bearer token", Response.Status.BAD_REQUEST);
             }
 
-            ClientModel client = realm.getClientByClientId(accessToken.getIssuedFor());
+            ClientModel client = realm.getClientByClientId(verifiedAccessToken.getIssuedFor());
 
             session.getContext().setClient(client);
 
@@ -100,7 +95,7 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
         String subjectToken = formParams.getFirst("subject_token");
 
         if (accessTokenString == null) {
-            // in case no bearer token is provided, we force client authentication
+            // Without an access token in the header, client authentication is required.
             checkClient();
 
             // if a claim token is provided, we check if the format is a OpenID Connect IDToken and assume the token represents the identity asking for permissions
@@ -109,18 +104,19 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
             } else if (subjectToken != null) {
                 accessTokenString = subjectToken;
             } else {
-                // Clients need to authenticate in order to obtain a RPT from the server.
-                // In order to support cases where the client is obtaining permissions on its on behalf, we issue a temporary access token
+                // Issue a temporary token for clients requesting permissions on their own behalf.
                 OAuth2GrantType clientCredentialsGrant = session.getProvider(OAuth2GrantType.class, OAuth2Constants.CLIENT_CREDENTIALS);
                 context.setClient(client);
                 context.setClientConfig(clientConfig);
                 context.setClientAuthAttributes(clientAuthAttributes);
                 accessTokenString = AccessTokenResponse.class.cast(clientCredentialsGrant.process(context).getEntity()).getToken();
+                verifiedAccessToken = session.tokens().decode(accessTokenString, AccessToken.class);
             }
         }
 
         AuthorizationTokenService.KeycloakAuthorizationRequest authorizationRequest = new AuthorizationTokenService.KeycloakAuthorizationRequest(session.getProvider(AuthorizationProvider.class),
                 tokenManager, event, this.request, cors, clientConnection);
+        authorizationRequest.setVerifiedAccessToken(verifiedAccessToken);
 
         authorizationRequest.setTicket(formParams.getFirst("ticket"));
         authorizationRequest.setClaimToken(claimToken);

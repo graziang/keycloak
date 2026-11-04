@@ -29,7 +29,6 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.authentication.actiontoken.TokenUtils;
-import org.keycloak.common.Profile;
 import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.CollectionUtil;
 import org.keycloak.events.Details;
@@ -45,16 +44,18 @@ import org.keycloak.protocol.oidc.TokenExchangeContext;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.protocol.oidc.encode.TokenContextEncoderProvider;
+import org.keycloak.protocol.oidc.verifier.TokenBindingException;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext.TokenUse;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProviderManager;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.representations.IDToken;
-import org.keycloak.representations.dpop.DPoP;
 import org.keycloak.services.CorsErrorResponseException;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.clientpolicy.context.TokenExchangeResponseContext;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.managers.AuthenticationSessionManager;
-import org.keycloak.services.util.DPoPUtil;
 import org.keycloak.services.util.MtlsHoKTokenUtil;
 import org.keycloak.services.util.UserSessionUtil;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -135,7 +136,7 @@ public class StandardTokenExchangeProvider extends AbstractTokenExchangeProvider
         event.detail(Details.REQUESTED_TOKEN_TYPE, context.getParams().getRequestedTokenType());
 
         AuthenticationManager.AuthResult authResult = AuthenticationManager.verifyIdentityToken(session, realm, session.getContext().getUri(), clientConnection, true, true, null,
-                false, subjectToken, context.getHeaders(), verifier -> {});
+                false, subjectToken, context.getHeaders(), verifier -> {}, TokenUse.TOKEN_EXCHANGE);
         if (authResult == null) {
             event.detail(Details.REASON, "subject_token validation failure");
             event.error(Errors.INVALID_TOKEN);
@@ -182,30 +183,14 @@ public class StandardTokenExchangeProvider extends AbstractTokenExchangeProvider
                       Response.Status.BAD_REQUEST);
             }
 
-            AccessToken.Confirmation cnf = token.getConfirmation();
-            // Validate mTLS
-            if (cnf.getCertThumbprint() != null) {
-                if (!MtlsHoKTokenUtil.verifyTokenBindingWithClientCertificate(token, session.getContext().getHttpRequest(), session)) {
-                    throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, MtlsHoKTokenUtil.CERT_VERIFY_ERROR_DESC, Response.Status.BAD_REQUEST);
-                }
-            }
-            // Validate DPoP
-            if (Profile.isFeatureEnabled(Profile.Feature.DPOP) && cnf.getKeyThumbprint() != null) {
-                DPoP dPoP = session.getAttribute(DPoPUtil.DPOP_SESSION_ATTRIBUTE, DPoP.class);
-                if (dPoP == null) {
-                    event.detail(Details.REASON, "DPoP proof is missing");
-                    event.error(Errors.INVALID_DPOP_PROOF);
-                    throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
-                          "DPoP proof is missing", Response.Status.BAD_REQUEST);
-                }
-                try {
-                    DPoPUtil.validateBinding(token, dPoP);
-                } catch (VerificationException ex) {
+            try {
+                new TokenVerifierProviderManager().verifyTokenBinding(token, TokenVerificationContext.forTokenExchange(session));
+            } catch (VerificationException ex) {
+                if (ex instanceof TokenBindingException bindingException) {
                     event.detail(Details.REASON, ex.getMessage());
-                    event.error(Errors.INVALID_DPOP_PROOF);
-                    throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
-                          ex.getMessage(), Response.Status.BAD_REQUEST);
+                    event.error(bindingException.getError());
                 }
+                throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, ex.getMessage(), Response.Status.BAD_REQUEST);
             }
         }
     }

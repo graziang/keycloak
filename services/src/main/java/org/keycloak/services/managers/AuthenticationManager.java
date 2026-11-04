@@ -103,7 +103,8 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.protocol.oidc.encode.TokenContextEncoderProvider;
-import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext.TokenUse;
 import org.keycloak.protocol.oidc.verifier.TokenVerifierProviderManager;
 import org.keycloak.rar.AuthorizationDetails;
 import org.keycloak.representations.AccessToken;
@@ -1554,6 +1555,20 @@ public class AuthenticationManager {
 
     public static AuthResult verifyIdentityToken(KeycloakSession session, RealmModel realm, UriInfo uriInfo, ClientConnection connection, boolean checkActive, boolean checkTokenType,
                                                  String checkAudience, boolean isCookie, String tokenString, HttpHeaders headers, Consumer<TokenVerifier<AccessToken>> verifierConsumer) {
+        return verifyIdentityToken(session, realm, uriInfo, connection, checkActive, checkTokenType, checkAudience, isCookie,
+                tokenString, headers, verifierConsumer, TokenUse.RESOURCE_AUTHORIZATION);
+    }
+
+    public static AuthResult verifyIdentityToken(KeycloakSession session, RealmModel realm, UriInfo uriInfo, ClientConnection connection, boolean checkActive, boolean checkTokenType,
+                                                 String checkAudience, boolean isCookie, String tokenString, HttpHeaders headers, Consumer<TokenVerifier<AccessToken>> verifierConsumer,
+                                                 TokenUse tokenUse) {
+        return verifyIdentityToken(session, realm, uriInfo, connection, checkActive, checkTokenType, checkAudience, isCookie,
+                tokenString, headers, verifierConsumer, tokenUse, session.getContext().getHttpRequest());
+    }
+
+    public static AuthResult verifyIdentityToken(KeycloakSession session, RealmModel realm, UriInfo uriInfo, ClientConnection connection, boolean checkActive, boolean checkTokenType,
+                                                 String checkAudience, boolean isCookie, String tokenString, HttpHeaders headers, Consumer<TokenVerifier<AccessToken>> verifierConsumer,
+                                                 TokenUse tokenUse, HttpRequest request) {
         try {
             TokenVerifier<AccessToken> verifier = TokenVerifier.create(tokenString, AccessToken.class)
               .withDefaultChecks()
@@ -1571,8 +1586,11 @@ public class AuthenticationManager {
             if (checkTokenType) {
                 verifier.withChecks(new TokenManager.TokenRevocationCheck(session));
 
-                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, uriInfo);
-                new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
+                AppAuthManager.AuthHeader authHeader = tokenUse == TokenUse.RESOURCE_AUTHORIZATION
+                        ? AppAuthManager.extractAuthorizationHeaderTokenOrReturnNull(headers) : null;
+                TokenVerificationContext ctx = new TokenVerificationContext(session, realm, uriInfo, request, tokenString,
+                        authHeader == null ? null : authHeader.getScheme(), tokenUse);
+                new TokenVerifierProviderManager().additionalAccessTokenVerifications(verifier, ctx);
             }
 
             String kid = verifier.getHeader().getKeyId();

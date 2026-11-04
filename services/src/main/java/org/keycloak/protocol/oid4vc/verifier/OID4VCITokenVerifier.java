@@ -12,7 +12,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider;
 import org.keycloak.protocol.oid4vc.utils.CredentialScopeUtils;
-import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext;
 import org.keycloak.representations.AccessToken;
 
 import org.jboss.logging.Logger;
@@ -25,9 +25,9 @@ import org.jboss.logging.Logger;
 public class OID4VCITokenVerifier implements TokenVerifier.Predicate<AccessToken> {
     private static final Logger logger = Logger.getLogger(OID4VCITokenVerifier.class);
 
-    private final TokenVerifierProvider.TokenVerifierProviderContext context;
+    private final TokenVerificationContext context;
 
-    OID4VCITokenVerifier(TokenVerifierProvider.TokenVerifierProviderContext context) {
+    OID4VCITokenVerifier(TokenVerificationContext context) {
         this.context = context;
     }
 

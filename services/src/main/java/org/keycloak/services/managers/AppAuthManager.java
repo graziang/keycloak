@@ -29,7 +29,7 @@ import org.keycloak.http.HttpRequest;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.util.DPoPUtil;
+import org.keycloak.protocol.oidc.verifier.TokenVerificationContext.TokenUse;
 
 import org.jboss.logging.Logger;
 
@@ -141,6 +141,7 @@ public class AppAuthManager extends AuthenticationManager {
         private HttpRequest request;
         private String tokenString;
         private String audience;
+        private TokenUse tokenUse = TokenUse.RESOURCE_AUTHORIZATION;
 
         public BearerTokenAuthenticator(KeycloakSession session) {
             this.session = session;
@@ -186,6 +187,14 @@ public class AppAuthManager extends AuthenticationManager {
             return this;
         }
 
+        public BearerTokenAuthenticator setTokenUse(TokenUse tokenUse) {
+            if (tokenUse == null || !tokenUse.isResourceAuthorization()) {
+                throw new IllegalArgumentException("Resource authentication requires a resource token use");
+            }
+            this.tokenUse = tokenUse;
+            return this;
+        }
+
         public AuthResult authenticate() {
             KeycloakContext ctx = session.getContext();
             if (realm == null) realm = ctx.getRealm();
@@ -197,9 +206,7 @@ public class AppAuthManager extends AuthenticationManager {
             // audience can be null
 
             return verifyIdentityToken(session, realm, uriInfo, connection, true, true, audience, false, tokenString, headers,
-                    verifier -> {
-                        DPoPUtil.withDPoPVerifier(verifier, realm, new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).accessToken(tokenString));
-                    });
+                    verifier -> {}, tokenUse, request);
         }
     }
 

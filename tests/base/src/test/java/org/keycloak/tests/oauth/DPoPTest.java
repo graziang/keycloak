@@ -1191,7 +1191,7 @@ public class DPoPTest {
         AccessTokenResponse tokenResponse = getDPoPBindAccessToken(rsaKeyPair);
         String exchangeDpopProof = generateSignedDPoPProof(UUID.randomUUID().toString(), HttpMethod.POST,
                 oauth.getEndpoints().getToken(), Time.currentTimeSeconds(), Algorithm.PS256, jwsRsaHeader,
-                rsaKeyPair.getPrivate(), tokenResponse.getAccessToken());
+                rsaKeyPair.getPrivate(), null);
 
         AccessTokenResponse exchangeResponse = oauth.tokenExchangeRequest(tokenResponse.getAccessToken())
                 .client(TEST_CONFIDENTIAL_CLIENT_ID, TEST_CONFIDENTIAL_CLIENT_SECRET)
