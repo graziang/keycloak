@@ -107,6 +107,8 @@ import org.keycloak.protocol.oidc.OIDCProviderConfig;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.utils.AuthorizeClientUtil;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.ProofOfPossession;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.TokenPresentation;
 import org.keycloak.protocol.saml.SamlSessionUtils;
 import org.keycloak.protocol.saml.preprocessor.SamlAuthenticationPreprocessor;
 import org.keycloak.representations.AccessToken;
@@ -129,7 +131,6 @@ import org.keycloak.services.messages.Messages;
 import org.keycloak.services.util.AuthenticationFlowURLHelper;
 import org.keycloak.services.util.BrowserHistoryHelper;
 import org.keycloak.services.util.CacheControlUtil;
-import org.keycloak.services.util.DPoPUtil;
 import org.keycloak.services.util.DefaultClientSessionContext;
 import org.keycloak.services.util.UserSessionUtil;
 import org.keycloak.services.validation.Validation;
@@ -543,9 +544,7 @@ public class IdentityBrokerService implements UserAuthenticationIdentityProvider
         String tokenString = session.getContext().getHttpRequest().getDecodedFormParameters().getFirst(OAuth2Constants.TOKEN);
         AuthenticationManager.AuthResult authResult = AuthenticationManager.verifyIdentityToken(
                 session, realmModel, session.getContext().getUri(), clientConnection, true, true, null, false, tokenString, headers,
-                verifier -> {
-                    DPoPUtil.withDPoPVerifier(verifier, realmModel, new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).accessToken(tokenString));
-                });
+                verifier -> {}, TokenPresentation.GRANT_PARAMETER, ProofOfPossession.REQUIRED);
         if (authResult == null) {
             event.error(Errors.INVALID_TOKEN);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_TOKEN, "Invalid token", Response.Status.BAD_REQUEST);

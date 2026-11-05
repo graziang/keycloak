@@ -19,6 +19,7 @@
 package org.keycloak.authorization.util;
 
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.TokenPresentation;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.services.managers.AppAuthManager;
 import org.keycloak.services.managers.AuthenticationManager.AuthResult;
@@ -39,8 +40,13 @@ public class Tokens {
     }
 
     public static AccessToken getAccessToken(String accessToken, KeycloakSession keycloakSession) {
+        return getAccessToken(accessToken, keycloakSession, TokenPresentation.PROTECTED_RESOURCE);
+    }
+
+    public static AccessToken getAccessToken(String accessToken, KeycloakSession keycloakSession, TokenPresentation presentation) {
         AuthResult authResult = new AppAuthManager.BearerTokenAuthenticator(keycloakSession)
                 .setTokenString(accessToken)
+                .setPresentation(presentation)
                 .authenticate();
 
         if (authResult != null) {

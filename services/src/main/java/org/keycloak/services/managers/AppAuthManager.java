@@ -29,7 +29,8 @@ import org.keycloak.http.HttpRequest;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.services.util.DPoPUtil;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.ProofOfPossession;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.TokenPresentation;
 
 import org.jboss.logging.Logger;
 
@@ -141,6 +142,7 @@ public class AppAuthManager extends AuthenticationManager {
         private HttpRequest request;
         private String tokenString;
         private String audience;
+        private TokenPresentation presentation = TokenPresentation.PROTECTED_RESOURCE;
 
         public BearerTokenAuthenticator(KeycloakSession session) {
             this.session = session;
@@ -186,6 +188,14 @@ public class AppAuthManager extends AuthenticationManager {
             return this;
         }
 
+        /**
+         * How the token reached the server. Defaults to a token presented as a credential in the Authorization header.
+         */
+        public BearerTokenAuthenticator setPresentation(TokenPresentation presentation) {
+            this.presentation = presentation;
+            return this;
+        }
+
         public AuthResult authenticate() {
             KeycloakContext ctx = session.getContext();
             if (realm == null) realm = ctx.getRealm();
@@ -196,10 +206,14 @@ public class AppAuthManager extends AuthenticationManager {
             if (tokenString == null) tokenString = extractAuthorizationHeaderToken(headers);
             // audience can be null
 
+            String authorizationScheme = null;
+            if (presentation == TokenPresentation.PROTECTED_RESOURCE) {
+                AuthHeader authHeader = extractAuthorizationHeaderTokenOrReturnNull(headers);
+                authorizationScheme = authHeader == null ? null : authHeader.getScheme();
+            }
+
             return verifyIdentityToken(session, realm, uriInfo, connection, true, true, audience, false, tokenString, headers,
-                    verifier -> {
-                        DPoPUtil.withDPoPVerifier(verifier, realm, new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).accessToken(tokenString));
-                    });
+                    verifier -> {}, presentation, ProofOfPossession.REQUIRED, authorizationScheme, request);
         }
     }
 

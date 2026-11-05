@@ -78,7 +78,10 @@ import org.keycloak.representations.oidc.TokenMetadataRepresentation;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.clientpolicy.condition.AnyClientConditionFactory;
 import org.keycloak.services.clientpolicy.condition.ClientAccessTypeConditionFactory;
+import org.keycloak.services.clientpolicy.condition.ClientUpdaterContextCondition;
+import org.keycloak.services.clientpolicy.condition.ClientUpdaterContextConditionFactory;
 import org.keycloak.services.clientpolicy.executor.DPoPBindEnforcerExecutorFactory;
+import org.keycloak.services.clientpolicy.executor.RejectRequestExecutorFactory;
 import org.keycloak.services.cors.Cors;
 import org.keycloak.testframework.annotations.InjectEvents;
 import org.keycloak.testframework.annotations.InjectKeycloakUrls;
@@ -122,6 +125,8 @@ import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.keycloak.OAuth2Constants.DPOP_HTTP_HEADER;
 import static org.keycloak.OAuth2Constants.DPOP_JWT_HEADER_TYPE;
@@ -1127,6 +1132,84 @@ public class DPoPTest {
     }
 
     @Test
+    public void testDPoPClientRegistration() throws Exception {
+        oauth.client(TEST_CONFIDENTIAL_CLIENT_ID, TEST_CONFIDENTIAL_CLIENT_SECRET);
+        String tokenProof = generateSignedDPoPProof(UUID.randomUUID().toString(), HttpMethod.POST,
+                oauth.getEndpoints().getToken(), Time.currentTimeSeconds(), Algorithm.PS256, jwsRsaHeader,
+                rsaKeyPair.getPrivate(), null);
+        AccessTokenResponse response = oauth.passwordGrantRequest("test-admin@localhost", "password").dpopProof(tokenProof).send();
+        assertEquals(200, response.getStatusCode());
+        String token = response.getAccessToken();
+        String url = realm.getBaseUrl() + "/clients-registrations/default/" + TEST_CONFIDENTIAL_CLIENT_ID;
+
+        assertEquals(401, simpleHttp.doGet(url).auth(token).asStatus());
+        assertEquals(401, simpleHttp.doGet(url).header(HttpHeaders.AUTHORIZATION, "DPoP " + token).asStatus());
+
+        String wrongKeyProof = generateSignedDPoPProof(UUID.randomUUID().toString(), HttpMethod.GET, url,
+                Time.currentTimeSeconds(), Algorithm.ES256, jwsEcHeader, ecKeyPair.getPrivate(), token);
+        assertEquals(401, simpleHttp.doGet(url).header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
+                .header(DPOP_HTTP_HEADER, wrongKeyProof).asStatus());
+
+        String wrongUrlProof = generateSignedDPoPProof(UUID.randomUUID().toString(), HttpMethod.GET,
+                oauth.getEndpoints().getUserInfo(), Time.currentTimeSeconds(), Algorithm.PS256, jwsRsaHeader,
+                rsaKeyPair.getPrivate(), token);
+        assertEquals(401, simpleHttp.doGet(url).header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
+                .header(DPOP_HTTP_HEADER, wrongUrlProof).asStatus());
+
+        String proof = generateSignedDPoPProof(UUID.randomUUID().toString(), HttpMethod.GET, url,
+                Time.currentTimeSeconds(), Algorithm.PS256, jwsRsaHeader, rsaKeyPair.getPrivate(), token);
+        assertEquals(200, simpleHttp.doGet(url).header(HttpHeaders.AUTHORIZATION, "dpop " + token)
+                .header(DPOP_HTTP_HEADER, proof).asStatus());
+        assertEquals(401, simpleHttp.doGet(url).header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
+                .header(DPOP_HTTP_HEADER, proof).asStatus());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testClientRegistrationAppliesAuthenticatedUserPolicy(boolean dpop) throws Exception {
+        realm.updateClientWithCleanup(TEST_CONFIDENTIAL_CLIENT_ID, c -> c.attribute(OIDCConfigAttributes.DPOP_BOUND_ACCESS_TOKENS, Boolean.toString(dpop)));
+        oauth.client(TEST_CONFIDENTIAL_CLIENT_ID, TEST_CONFIDENTIAL_CLIENT_SECRET);
+        AccessTokenResponse tokens = oauth.passwordGrantRequest("test-admin@localhost", "password")
+                .dpopProof(dpop ? DPoPGenerator.generateRsaSignedDPoPProof(rsaKeyPair, HttpMethod.POST, oauth.getEndpoints().getToken(), null) : null)
+                .send();
+        assertEquals(200, tokens.getStatusCode(), tokens.getErrorDescription());
+
+        String url = realm.getBaseUrl() + "/clients-registrations/openid-connect";
+        OIDCClientRepresentation client = new OIDCClientRepresentation();
+        client.setClientName(generateSuffixedName("authenticated-dcr"));
+        client.setRedirectUris(List.of(oauth.getRedirectUri()));
+        String scheme = dpop ? DPOP_SCHEME : TokenUtil.TOKEN_TYPE_BEARER;
+        try (var response = simpleHttp.doPost(url).json(client)
+                .header(HttpHeaders.AUTHORIZATION, scheme + " " + tokens.getAccessToken())
+                .header(DPOP_HTTP_HEADER, dpop ? DPoPGenerator.generateRsaSignedDPoPProof(rsaKeyPair, HttpMethod.POST, url, tokens.getAccessToken()) : null)
+                .asResponse()) {
+            assertEquals(201, response.getStatus(), response.asString());
+            String clientId = response.asJson(OIDCClientRepresentation.class).getClientId();
+            realm.cleanup().add(r -> AdminApiUtil.findClientByClientId(r, clientId).remove());
+        }
+
+        ClientUpdaterContextCondition.Configuration condition = new ClientUpdaterContextCondition.Configuration();
+        condition.setUpdateClientSource(List.of(ClientUpdaterContextConditionFactory.BY_AUTHENTICATED_USER));
+        realm.updateClientProfile(List.of(new ClientProfileBuilder().createProfile("reject-authenticated-dcr", "Reject authenticated registration")
+                .addExecutor(RejectRequestExecutorFactory.PROVIDER_ID, null).toRepresentation()));
+        realm.updateClientPolicy(List.of(new ClientPolicyBuilder().createPolicy("authenticated-dcr", "Authenticated registration", true)
+                .addCondition(ClientUpdaterContextConditionFactory.PROVIDER_ID, condition)
+                .addProfile("reject-authenticated-dcr").toRepresentation()));
+
+        try (var response = simpleHttp.doPost(url).json(client)
+                .header(HttpHeaders.AUTHORIZATION, scheme + " " + tokens.getAccessToken())
+                .header(DPOP_HTTP_HEADER, dpop ? DPoPGenerator.generateRsaSignedDPoPProof(rsaKeyPair, HttpMethod.POST, url, tokens.getAccessToken()) : null)
+                .asResponse()) {
+            assertEquals(403, response.getStatus(), response.asString());
+            assertEquals(OAuthErrorException.INVALID_REQUEST, response.asJson().get("error_description").asText());
+        } finally {
+            ClientPoliciesRepresentation policies = new ClientPoliciesRepresentation();
+            policies.setPolicies(List.of());
+            realm.admin().clientPoliciesPoliciesResource().updatePolicies(policies);
+        }
+    }
+
+    @Test
     public void testDPoPAccountRequestSuccess() throws Exception {
         KeyPair rsaKeyPair = KeyUtils.generateRsaKeyPair(2048);
         AccessTokenResponse response = getDPoPBindAccessToken(rsaKeyPair);
@@ -1191,7 +1274,7 @@ public class DPoPTest {
         AccessTokenResponse tokenResponse = getDPoPBindAccessToken(rsaKeyPair);
         String exchangeDpopProof = generateSignedDPoPProof(UUID.randomUUID().toString(), HttpMethod.POST,
                 oauth.getEndpoints().getToken(), Time.currentTimeSeconds(), Algorithm.PS256, jwsRsaHeader,
-                rsaKeyPair.getPrivate(), tokenResponse.getAccessToken());
+                rsaKeyPair.getPrivate(), null);
 
         AccessTokenResponse exchangeResponse = oauth.tokenExchangeRequest(tokenResponse.getAccessToken())
                 .client(TEST_CONFIDENTIAL_CLIENT_ID, TEST_CONFIDENTIAL_CLIENT_SECRET)

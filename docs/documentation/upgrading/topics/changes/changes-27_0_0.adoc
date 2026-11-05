@@ -34,6 +34,17 @@ For example, an unknown client returns `{"error":"invalid_client","error_descrip
 Applications should use `error` rather than matching translated messages. HTTP status codes and HTML error pages retain their existing behavior, and errors sent to a validated redirect URI continue to use that redirect.
 Other JSON error pages, including direct-grant authenticator errors, are unchanged.
 
+=== Validation of sender-constrained access tokens on more endpoints
+// https://github.com/keycloak/keycloak/issues/54277
+
+{project_name} now verifies the binding of certificate-bound and DPoP-bound access tokens on the client registration, identity brokering, Authorization Services, and credential endpoints, in addition to the UserInfo, Admin REST, and Account REST endpoints where it was already verified.
+
+Applications that use certificate-bound access tokens must present the matching client certificate when calling these endpoints.
+Applications that use DPoP-bound access tokens must send them with the `DPoP` authorization scheme and include a valid proof for each request.
+Requests that previously succeeded without the certificate or the proof are now rejected.
+
+Token introspection is unchanged and still does not require proof of possession from the caller.
+
 === Realm-level default client scopes require `manage-realm`
 // https://github.com/keycloak/keycloak/issues/50588
 

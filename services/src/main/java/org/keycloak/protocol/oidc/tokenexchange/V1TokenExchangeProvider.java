@@ -49,6 +49,8 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.TokenExchangeContext;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.endpoints.TokenEndpoint;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.ProofOfPossession;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.TokenPresentation;
 import org.keycloak.protocol.saml.SamlClient;
 import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.protocol.saml.SamlService;
@@ -117,7 +119,8 @@ public class V1TokenExchangeProvider extends AbstractTokenExchangeProvider {
             }
 
             AuthenticationManager.AuthResult authResult = AuthenticationManager.verifyIdentityToken(session, realm, session.getContext().getUri(), clientConnection, true, true, null,
-                    false, subjectToken, context.getHeaders(), verifier -> {});
+                    // Legacy token exchange does not support bound tokens: it issues the exchanged token without any binding
+                    false, subjectToken, context.getHeaders(), verifier -> {}, TokenPresentation.GRANT_PARAMETER, ProofOfPossession.NOT_APPLICABLE);
             if (authResult == null) {
                 event.detail(Details.REASON, "subject_token validation failure");
                 event.error(Errors.INVALID_TOKEN);

@@ -35,6 +35,8 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenExchangeContext;
 import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.ProofOfPossession;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider.TokenPresentation;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
@@ -91,7 +93,8 @@ public class TokenExchangeDelegationProvider extends StandardTokenExchangeProvid
         }
 
         AuthenticationManager.AuthResult actorAuthResult = AuthenticationManager.verifyIdentityToken(session, realm, session.getContext().getUri(), clientConnection, true, true, null,
-                false, actorToken, context.getHeaders(), verifier -> {});
+                // The actor token identifies the client acting on behalf of the subject, and its own binding is not verified
+                false, actorToken, context.getHeaders(), verifier -> {}, TokenPresentation.GRANT_PARAMETER, ProofOfPossession.NOT_APPLICABLE);
         if (actorAuthResult == null) {
             event.detail(Details.REASON, "actor_token validation failure");
             event.error(Errors.INVALID_TOKEN);
